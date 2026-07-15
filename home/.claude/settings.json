@@ -8,6 +8,7 @@
     "code-simplifier@claude-plugins-official": true,
     "greptile@claude-plugins-official": false,
     "hookify@claude-plugins-official": true,
+    "json-to-toon@ira-claude-plugins": true,
     "pr-review-toolkit@claude-plugins-official": true,
     "security-guidance@claude-plugins-official": true,
     "superpowers@claude-plugins-official": true,
