@@ -1,0 +1,43 @@
+{
+  "$schema": "https://raw.githubusercontent.com/spences10/claude-statusline-powerline/main/statusline.schema.json",
+	"color_theme": "dark",
+	"font_profile": "nerd-font",
+	"segment_config": {
+		"segments": [
+			{
+				"type": "model",
+				"style": {
+					"icons": {
+						"ai": "🤖"
+					}
+				}
+			},
+			{
+				"type": "directory",
+				"style": {
+					"icons": {
+						"folder": "🗂️"
+					}
+				}
+			},
+			{
+				"type": "git",
+				"style": { "truncation_length": 20,
+					"icons": {
+						"branch": "🌿",
+						"clean": "✅",
+						"dirty": "⚠️"
+					}
+				}
+			},
+			{
+				"type": "session",
+				"style": {
+					"icons": {
+						"cost": "💲"
+					}
+				}
+			}
+		]
+	}
+}
