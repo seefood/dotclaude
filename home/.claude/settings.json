@@ -1,5 +1,17 @@
 {
+  "alwaysThinkingEnabled": true,
   "cleanupPeriodDays": 365,
+  "enableAllProjectMcpServers": false,
+  "enabledPlugins": {
+    "claude-md-management@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true,
+    "greptile@claude-plugins-official": false,
+    "hookify@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true
+  },
   "env": {
     "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "200000",
     "CLAUDE_CODE_DISABLE_1M_CONTEXT": "1",
@@ -15,6 +27,81 @@
     "DISABLE_TELEMETRY": "1",
     "VISUAL": "~/.claude/skills/enhance/scripts/enhance"
   },
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/play-sound.sh notification",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/format-file.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": "Edit|MultiEdit"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/scripts/validate-bash.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      }
+    ],
+    "SessionStart": [
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/play-sound.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      },
+      {
+        "hooks": [
+          {
+            "command": "claudekit-hooks run self-review",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "SubagentStop": [
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "claudekit-hooks run codebase-map",
+            "type": "command"
+          },
+          {
+            "command": "claudekit-hooks run thinking-level",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ]
+  },
+  "model": "sonnet",
   "permissions": {
     "allow": [
       "Bash(git log *)",
@@ -61,98 +148,13 @@
       "Read(~/Library/Application Support/**/solflare*/**)"
     ]
   },
-  "model": "sonnet",
-  "enableAllProjectMcpServers": false,
-  "hooks": {
-    "Notification": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/play-sound.sh notification"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/format-file.sh"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/scripts/validate-bash.sh"
-          }
-        ]
-      }
-    ],
-    "SessionStart": [],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/play-sound.sh"
-          }
-        ]
-      },
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "claudekit-hooks run self-review"
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [],
-    "UserPromptSubmit": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "claudekit-hooks run codebase-map"
-          },
-          {
-            "type": "command",
-            "command": "claudekit-hooks run thinking-level"
-          }
-        ]
-      }
-    ]
-  },
-  "statusLine": {
-    "type": "command",
-    "command": "~/.claude/statusline-command.sh",
-    "refreshInterval": 30
-  },
-  "enabledPlugins": {
-    "claude-md-management@claude-plugins-official": true,
-    "code-review@claude-plugins-official": true,
-    "code-simplifier@claude-plugins-official": true,
-    "greptile@claude-plugins-official": false,
-    "hookify@claude-plugins-official": true,
-    "pr-review-toolkit@claude-plugins-official": true,
-    "security-guidance@claude-plugins-official": true,
-    "superpowers@claude-plugins-official": true
-  },
-  "alwaysThinkingEnabled": true,
   "skipDangerousModePermissionPrompt": true,
-  "verbose": true,
+  "statusLine": {
+    "command": "~/.claude/statusline-command.sh",
+    "refreshInterval": 30,
+    "type": "command"
+  },
   "terminalProgressBarEnabled": false,
+  "verbose": true,
   "voiceEnabled": true
 }

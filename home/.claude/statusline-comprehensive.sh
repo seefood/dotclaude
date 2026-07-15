@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC1083 # @{upstream} is git refspec syntax, not brace expansion
 
 # Read JSON input from Claude Code
 input=$(cat)
