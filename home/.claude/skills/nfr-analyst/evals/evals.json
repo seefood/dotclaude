@@ -1,0 +1,46 @@
+{
+  "skill_name": "nfr-analyst",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Analyze the architecture document at /home/danco/Documents/code/cloud-architecture/architecture-overview.md for NFRs. Identify what's explicitly stated, what can be inferred, and what gaps exist. Then generate NFR documentation I can add to the doc.",
+      "expected_output": "A structured NFR analysis with coverage matrix, detailed findings across all 6 categories, compliance assessment, and a ready-to-use NFR documentation section. Should identify explicit NFRs (layering rules, hub-and-spoke model, specific services like IAM and observability), infer NFRs from design choices (e.g., microservices imply maintainability concerns, IAM implies security), and flag missing NFRs (no performance targets, no availability SLAs stated).",
+      "files": [],
+      "assertions": [
+        "The output includes an NFR coverage matrix with all 6 categories (Performance, Scalability, Security, Reliability, Maintainability, Observability)",
+        "The output identifies at least one explicit NFR from the architecture document (e.g., layering rule, IAM service, observability infrastructure)",
+        "The output identifies at least one inferred NFR based on design signals in the document",
+        "The output identifies at least one missing NFR gap with a specific explanation",
+        "The output includes a Generated NFR Documentation section with requirements in each relevant category",
+        "The output includes a compliance assessment using the ✓/⚠/✗/— codes or equivalent"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Review the API spec at /home/danco/.claude/skills/nfr-analyst/evals/files/payment-api-spec.yaml for NFR coverage. This is a payment processing API. What NFRs are addressed, what can be inferred, and what's missing for a production payment system?",
+      "expected_output": "A structured NFR analysis specific to payment APIs. Should recognize that a payment API has high security and reliability requirements. Should flag that the spec has no authentication/authorization defined (no securitySchemes), no rate limiting, no idempotency keys for payment creation, and no observability/audit trail requirements. Should infer some NFRs from design choices (tokenized payment methods imply PCI compliance concerns, status enum implies some reliability thinking). Should generate comprehensive NFR documentation appropriate for a payment system.",
+      "files": ["evals/files/payment-api-spec.yaml"],
+      "assertions": [
+        "The output identifies that the spec has no authentication or authorization defined (missing securitySchemes or security fields)",
+        "The output flags security as having significant gaps for a payment API",
+        "The output identifies that idempotency is not addressed (no idempotency key on the payment creation endpoint)",
+        "The output recognizes that tokenized payment methods imply security/PCI compliance concerns (inferred NFR)",
+        "The output includes generated NFR documentation with specific requirements for a payment system",
+        "The output addresses all 6 NFR categories in its analysis"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Analyze this design document for NFRs:\n\n---\n# User Profile Service\n\nThis service manages user profiles.\n\nIt stores user data and provides an API for reading and updating profiles.\n\n## Tech stack\n\n- Node.js\n- PostgreSQL\n---\n\nWhat NFRs are covered and what gaps exist?",
+      "expected_output": "The skill should recognize this as an insufficient artifact — it describes almost nothing about the system's behavior, scale, security requirements, or architecture. It should explain what's missing (no component description, no behavior description, no scale signals, no API definition) and recommend what would make it sufficient, rather than producing a full (and misleading) NFR analysis.",
+      "files": [],
+      "assertions": [
+        "The output explicitly identifies the artifact as insufficient or too thin for a complete NFR analysis",
+        "The output explains specifically what information is missing (not just 'more detail needed')",
+        "The output lists concrete recommendations for what a sufficient artifact should include",
+        "The output does NOT produce a full NFR coverage matrix as if the artifact were complete",
+        "The output offers to analyze what IS present with caveats, or requests more information"
+      ]
+    }
+  ]
+}

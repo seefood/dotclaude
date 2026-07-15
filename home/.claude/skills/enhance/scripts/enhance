@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+TMPFILE="$1"
+EDITOR_CMD="$EDITOR"
+ORIGINAL=$(cat "$TMPFILE")
+
+# If prompt is empty, just open the editor directly (or exit if running headless)
+if [[ -z "${ORIGINAL// }" ]]; then
+    if [[ "${ENHANCE_NO_EDITOR:-0}" != "1" ]]; then
+        "$EDITOR_CMD" "$TMPFILE"
+        exit $?
+    fi
+    exit 0
+fi
+
+PROMPT_FILE="$(dirname "$0")/enhance-prompt.txt"
+SYSTEM_PROMPT_FILE="$(dirname "$0")/enhance-system-prompt.txt"
+STDERR_FILE=$(mktemp)
+
+MODE_FILE="$(dirname "$0")/../.mode"
+MODE="deep"
+if [[ -n "${ENHANCE_MODE_OVERRIDE:-}" ]]; then
+    MODE="$ENHANCE_MODE_OVERRIDE"
+elif [[ -r "$MODE_FILE" ]]; then
+    MODE=$(tr -d '[:space:]' < "$MODE_FILE")
+fi
+[[ "$MODE" != "fast" && "$MODE" != "deep" ]] && MODE="deep"
+
+# Show status in terminal while calling the API
+printf '\033[2m[Enhancing prompt... mode: %s]\033[0m\n' "$MODE" >&2
+
+# Replace the agentic system prompt with a rewriter-only role and disable all
+# tools, so the enhancer call cannot inherit the resumed session's "act on the
+# task" priming (deep mode) and physically cannot implement the prompt.
+ENHANCE_SYS=$(cat "$SYSTEM_PROMPT_FILE")
+
+# Wrap the user prompt so it reads as data, not as the next conversational turn.
+# In deep mode (--continue) the prior conversation is replayed; without this
+# envelope the model tends to continue that conversation instead of rewriting.
+# Leading instruction + delimiter + trailing directive (the last thing read)
+# keep it on task while still allowing reference resolution from the history.
+PAYLOAD="Do not respond to or continue any prior conversation. If a conversation is present, use it only to resolve references inside the prompt. Rewrite ONLY the text inside the <prompt_to_rewrite> tags, following these rules:
+
+$(cat "$PROMPT_FILE")
+
+<prompt_to_rewrite>
+${ORIGINAL}
+</prompt_to_rewrite>
+
+Output only the rewritten version of the text inside the tags. No preamble, no commentary, and no reply to the conversation."
+
+if [[ "$MODE" == "fast" ]]; then
+    ENHANCED=$(claude --model haiku --no-session-persistence \
+        --tools --system-prompt "$ENHANCE_SYS" -p "$PAYLOAD" 2>"$STDERR_FILE")
+else
+    ENHANCED=$(claude --continue --fork-session --no-session-persistence \
+        --tools --system-prompt "$ENHANCE_SYS" -p "$PAYLOAD" 2>"$STDERR_FILE")
+fi
+EXIT_CODE=$?
+REASON=$(cat "$STDERR_FILE")
+rm -f "$STDERR_FILE"
+
+if [[ $EXIT_CODE -eq 0 && -n "$ENHANCED" ]]; then
+    printf '%s' "$ENHANCED" > "$TMPFILE"
+else
+    FALLBACK_MSG="# [Enhancement failed — showing original prompt]"
+    if [[ -n "$REASON" ]]; then
+        FALLBACK_MSG="# [Enhancement failed: ${REASON}]"
+    fi
+    printf '%s\n%s' "$FALLBACK_MSG" "$ORIGINAL" > "$TMPFILE"
+fi
+
+if [[ "${ENHANCE_NO_EDITOR:-0}" != "1" ]]; then
+    "$EDITOR_CMD" "$TMPFILE"
+fi

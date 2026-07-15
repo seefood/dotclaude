@@ -1,0 +1,146 @@
+openapi: 3.0.3
+info:
+  title: Payment Processing API
+  version: 1.0.0
+  description: API for processing customer payments and managing payment methods.
+
+servers:
+  - url: https://api.example.com/v1
+
+paths:
+  /payments:
+    post:
+      summary: Create a new payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '201':
+          description: Payment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400':
+          description: Invalid request
+        '402':
+          description: Payment failed
+        '500':
+          description: Internal server error
+
+  /payments/{id}:
+    get:
+      summary: Get payment by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Payment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '404':
+          description: Payment not found
+
+  /payment-methods:
+    get:
+      summary: List saved payment methods for the current user
+      responses:
+        '200':
+          description: List of payment methods
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentMethod'
+    post:
+      summary: Save a new payment method
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentMethodRequest'
+      responses:
+        '201':
+          description: Payment method saved
+
+  /payment-methods/{id}:
+    delete:
+      summary: Remove a saved payment method
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+
+components:
+  schemas:
+    PaymentRequest:
+      type: object
+      required: [amount, currency, payment_method_id]
+      properties:
+        amount:
+          type: integer
+          description: Amount in smallest currency unit (e.g. cents)
+        currency:
+          type: string
+          example: USD
+        payment_method_id:
+          type: string
+        description:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+        amount:
+          type: integer
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [pending, succeeded, failed, refunded]
+        created_at:
+          type: string
+          format: date-time
+
+    PaymentMethod:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [card, bank_account]
+        last_four:
+          type: string
+        brand:
+          type: string
+
+    PaymentMethodRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: Tokenized payment method from client-side SDK

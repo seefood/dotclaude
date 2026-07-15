@@ -1,0 +1,83 @@
+description: "Enhance skill — deep-mode (--continue) regression suite"
+
+# These fixtures exercise the deep path the fast suite cannot: scripts/enhance
+# run with ENHANCE_MODE_OVERRIDE=deep against a seeded, topically-relevant
+# conversation. They guard the regression where the enhancer continued the live
+# conversation (or echoed its payload) instead of returning a rewritten prompt.
+#
+# Run:  promptfoo eval -c promptfooconfig.deep.yaml
+#       promptfoo eval -c promptfooconfig.deep.yaml --repeat 3   # variance check
+#
+# Slower and pricier than the fast suite: each test seeds a real session with
+# the default model before running the deep enhancer call.
+
+prompts:
+  - "{{prompt}}"
+
+providers:
+  - id: exec:./promptfoo-shim-deep
+    label: enhance-deep
+
+defaultTest:
+  options:
+    provider:
+      id: anthropic:messages:claude-haiku-4-5-20251001
+      config:
+        apiKeyRequired: false
+
+tests:
+  # The core regression: a prompt that reads as a natural continuation of the
+  # seeded billing conversation must still come back as a REWRITTEN PROMPT, not
+  # as a reply that performs the task or continues the thread.
+  - description: deep-continuation-resistance
+    vars:
+      prompt: "ok now go ahead and add input validation to it and run the tests to make sure they pass"
+    assert:
+      - type: llm-rubric
+        value: |
+          The text under test was produced by a prompt REWRITER that was given the
+          instruction: "{{prompt}}" while a prior coding conversation was in context.
+          Its only correct output is a rewritten, clearer version of that instruction
+          (optionally with an **Open questions** section).
+          Score 5 if the output is a rewritten prompt / instruction.
+          Score below 4 if instead it is a conversational reply, a status update, an
+          implementation, code, or commentary about the conversation (e.g. it starts
+          with "Sure", "I'll", "Done", "Here's", or otherwise answers rather than
+          rewrites).
+        threshold: 0.8
+      # Mechanical complement to the rubric: the trailing "No preamble" directive
+      # means a correct rewrite must not open with a conversational lead-in.
+      - type: not-regex
+        value: '^\s*(Sure|Here|Okay|Sounds good|Got it|Certainly|Absolutely|I''ll|I will|Let me)\b'
+      # Envelope scaffolding must not leak into the result (the original deep bug).
+      - type: not-contains
+        value: "<prompt_to_rewrite>"
+      - type: not-contains
+        value: "Do not respond to or continue"
+      - type: not-contains
+        value: "Output only the rewritten version"
+
+  # Reference resolution must survive the hardening: "that file" should resolve
+  # to invoice.py from the seeded conversation, and the intent must be kept.
+  # Checked mechanically — the rewrite-vs-reply property is already covered by
+  # deep-continuation-resistance, and an LLM judge proved too flaky here (it
+  # misreads a legitimate **Open questions** section as a conversational reply).
+  - description: deep-resolves-reference-from-history
+    vars:
+      prompt: "refactor that file to use Decimal instead of float for the money math"
+    assert:
+      # "that file" resolved to invoice.py using the --continue history.
+      - type: contains
+        value: "invoice.py"
+      # Refactor intent preserved.
+      - type: contains
+        value: "Decimal"
+      - type: contains
+        value: "float"
+      # Envelope scaffolding must not leak into the result (the original deep bug).
+      - type: not-contains
+        value: "<prompt_to_rewrite>"
+      - type: not-contains
+        value: "Do not respond to or continue"
+      - type: not-contains
+        value: "Output only the rewritten version"

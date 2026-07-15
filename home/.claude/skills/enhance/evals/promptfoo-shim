@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Bridge promptfoo's exec provider (prompt as argv[1]) to scripts/enhance,
+# which takes a tmpfile path and reads/writes the prompt from/to that file.
+#
+# The promptfoo provider config sets ENHANCE_MODE_OVERRIDE; we set
+# ENHANCE_NO_EDITOR=1 here so the script exits without launching $EDITOR.
+#
+# stdout: the enhanced prompt (what promptfoo treats as the model output).
+# stderr: scripts/enhance status messages, passed through unchanged.
+
+set -euo pipefail
+
+PROMPT="$1"
+TMPFILE=$(mktemp)
+trap 'rm -f "$TMPFILE"' EXIT
+
+printf '%s' "$PROMPT" > "$TMPFILE"
+
+export ENHANCE_NO_EDITOR=1
+"$(dirname "$0")/../scripts/enhance" "$TMPFILE"
+
+cat "$TMPFILE"

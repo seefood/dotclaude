@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Deep-mode bridge for the regression suite.
+#
+# The fast shim (promptfoo-shim) runs scripts/enhance with no conversation
+# history, so it never exercises the deep-mode --continue path — the path where
+# the enhancer once continued the live conversation instead of rewriting.
+#
+# This shim closes that gap: it seeds a real, topically-rich conversation in a
+# throwaway cwd, then runs scripts/enhance in deep mode (ENHANCE_MODE_OVERRIDE=deep)
+# from that cwd so --continue resumes the seed. The deep fixtures then assert the
+# script rewrites the prompt rather than answering or continuing the thread.
+#
+# stdout: the enhanced prompt (what promptfoo treats as the model output).
+
+set -euo pipefail
+
+PROMPT="$1"
+
+# Resolve scripts/enhance to an absolute path BEFORE changing directory.
+ENHANCE="$(cd "$(dirname "$0")/../scripts" && pwd)/enhance"
+
+WORKDIR=$(mktemp -d)
+trap 'rm -rf "$WORKDIR"' EXIT
+cd "$WORKDIR"
+
+# Seed a task-oriented conversation so --continue has rich, topically-relevant
+# history — the condition that triggered the conversational-continuation bug.
+# No --model: use the default model, matching a real deep-mode session.
+claude -p "We are refactoring the billing module. You just finished extracting the invoice calculator into invoice.py and we are about to keep going." >/dev/null 2>&1 || true
+
+TMPFILE="$WORKDIR/prompt.txt"
+printf '%s' "$PROMPT" > "$TMPFILE"
+
+export ENHANCE_NO_EDITOR=1
+export ENHANCE_MODE_OVERRIDE=deep
+"$ENHANCE" "$TMPFILE"
+
+cat "$TMPFILE"

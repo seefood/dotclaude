@@ -5,15 +5,22 @@
 minimum_pre_commit_version: 1.18.1
 exclude: "docs/_build/"
 
+# Locked third-party skill snapshots (home/.claude/skills/{enhance,nfr-analyst,challenger})
+# are pinned-commit copies kept byte-identical to the vetted upstream for supply-chain
+# integrity. Formatting/autofix hooks must not rewrite them; see the excludes below
+# and .gitattributes (for the git-check whitespace hook).
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ".(md|rst)$"
+        exclude: ".(md|rst)$|^home/\\.claude/skills/(enhance|nfr-analyst|challenger)/"
       - id: end-of-file-fixer
+        exclude: "^home/\\.claude/skills/(enhance|nfr-analyst|challenger)/"
       - id: check-merge-conflict
       - id: mixed-line-ending
+        exclude: "^home/\\.claude/skills/(enhance|nfr-analyst|challenger)/"
       - id: check-added-large-files
       - id: check-executables-have-shebangs
       - id: check-shebang-scripts-are-executable
@@ -25,7 +32,7 @@ repos:
       - id: shellcheck
         exclude: ".bats$|zsh"
       - id: shfmt
-        exclude: ".bats$"
+        exclude: "\\.bats$|^home/\\.claude/skills/(enhance|nfr-analyst|challenger)/"
   - repo: https://github.com/Lucas-C/pre-commit-hooks
     rev: ad1b27d73581aa16cca06fc4a0761fc563ffe8e8  # frozen: v1.5.6
     hooks:
@@ -38,6 +45,7 @@ repos:
       - id: json-sort
         args:
           - --autofix
+        exclude: "^home/\\.claude/skills/(enhance|nfr-analyst|challenger)/"
   - repo: local
     hooks:
       - id: shell-commons-bash-zsh-syntax

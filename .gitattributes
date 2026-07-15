@@ -1,0 +1,5 @@
+# Locked third-party skill snapshots are pinned-commit copies kept byte-identical
+# to the vetted upstream; don't flag their whitespace as errors.
+home/.claude/skills/enhance/** -whitespace
+home/.claude/skills/nfr-analyst/** -whitespace
+home/.claude/skills/challenger/** -whitespace
