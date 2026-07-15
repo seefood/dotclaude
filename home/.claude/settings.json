@@ -10,7 +10,8 @@
     "hookify@claude-plugins-official": true,
     "pr-review-toolkit@claude-plugins-official": true,
     "security-guidance@claude-plugins-official": true,
-    "superpowers@claude-plugins-official": true
+    "superpowers@claude-plugins-official": true,
+    "test-before-install@ira-claude-plugins": true
   },
   "env": {
     "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "200000",
@@ -26,6 +27,14 @@
     "DISABLE_ERROR_REPORTING": "1",
     "DISABLE_TELEMETRY": "1",
     "VISUAL": "~/.claude/skills/enhance/scripts/enhance"
+  },
+  "extraKnownMarketplaces": {
+    "ira-claude-plugins": {
+      "source": {
+        "repo": "seefood/ira-claude-plugins",
+        "source": "github"
+      }
+    }
   },
   "hooks": {
     "Notification": [
