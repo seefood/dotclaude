@@ -65,7 +65,3 @@ Keep every rejected or inconclusive entry instead of deleting it — it's eviden
 
 - This is a note-taking discipline, not a replacement for actually reproducing the bug — you still need a reliable repro to run experiments against.
 - Works standalone for a quick "write it down before you thrash" habit, and also serves as the concrete journaling practice for the Hypothesis-and-Testing phase of `superpowers:systematic-debugging` when that skill is in use.
-
-## Credit
-
-Method and worked example adapted from Noam Elfanbaum's [debugging-with-the-scientific-method](https://github.com/noamelf/debugging-with-the-scientific-method).
