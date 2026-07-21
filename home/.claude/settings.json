@@ -6,6 +6,7 @@
     "claude-md-management@claude-plugins-official": true,
     "code-review@claude-plugins-official": true,
     "code-simplifier@claude-plugins-official": true,
+    "debugging-with-the-scientific-method@ira-claude-plugins": true,
     "greptile@claude-plugins-official": false,
     "hookify@claude-plugins-official": true,
     "json-to-toon@ira-claude-plugins": true,
@@ -160,7 +161,7 @@
   },
   "skipDangerousModePermissionPrompt": true,
   "statusLine": {
-    "command": "~/.claude/statusline-command.sh",
+    "command": "~/.claude/statusline-comprehensive.sh",
     "refreshInterval": 30,
     "type": "command"
   },
