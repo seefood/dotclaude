@@ -98,6 +98,15 @@
 
 These principles apply to every change — not just new features.
 
+### Order of Precedence
+
+When rules conflict:
+
+- Hard stops override everything unless explicitly authorized.
+- Explicit instruction overrides defaults.
+- Correctness, safety, and existing behavior come before elegance or speed.
+- Prefer smaller diffs and style matching when they don't conflict with the above.
+
 ### Operating Modes
 
 - **Default mode:** make the smallest correct change that satisfies the request.
@@ -113,7 +122,7 @@ Before implementing:
 - If a simpler approach exists, say so. Push back when warranted.
 - On resuming a multi-step task after interruption, restate active assumptions.
 
-For multi-step or ambiguous tasks, briefly state: what you think the request means, what assumptions you are making, what needs clarification, and what you plan to change.
+For multi-step or ambiguous tasks, briefly state: what you think the request means, what assumptions you are making, what needs clarification, what you plan to change, and how you will verify success.
 
 ### Simplicity First
 
@@ -122,20 +131,24 @@ For multi-step or ambiguous tasks, briefly state: what you think the request mea
 - No "flexibility" or "configurability" that wasn't requested.
 - No error handling for logically impossible scenarios — always handle hardware, I/O, and external failures.
 - If you write substantially more code than the problem requires, simplify before delivery.
+- For existing code, prefer local simplification inside the requested change; broader simplification requires approval (unless in cleanup mode).
+- Industry patterns (SOLID, GoF, proven architectures) guide thinking but are never forced — use them when they make code clearer, drop them when they become ceremony.
 
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify. When choosing between clever and clear in new code, choose clear.
 
 ### Surgical Changes
 
 - Don't "improve" adjacent code, comments, or formatting.
 - Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
+- Match existing style, even if you'd do it differently — if the pattern is harmful, flag it rather than silently copying or silently fixing it.
 - If you notice unrelated dead code, mention it — don't delete it.
 - Never rename or move files/symbols without explicit instruction, even if naming is inconsistent.
 
-Safe without asking: fix typos in code you are already editing; remove imports/variables made unused by your change.
+Safe without asking: fix typos in code you are already editing; remove imports/variables made unused by your change; format code you are already modifying.
 
-Ask before: adding new dependencies, changing schemas/migrations/stored data formats, changing public APIs or shared interfaces, deleting code not made unused by your current change.
+Ask before: adding new dependencies, changing schemas/migrations/stored data formats, changing public APIs or shared interfaces, renaming or moving files/symbols beyond the local task, deleting code not made unused by your current change.
+
+If you see an opportunity to improve existing working code beyond the task's scope, share it and wait for explicit approval — don't act on it, and prefer modification over rewrite even when a rewrite seems cleaner.
 
 The test: every changed line should trace directly to the user's request.
 
@@ -149,7 +162,9 @@ Transform requests into verifiable goals:
 
 For multi-step tasks, state a brief plan: `1. [Step] → verify: [check]`
 
-After any non-trivial task, briefly note: what changed, what was verified, what remains unverified, and problems noticed but intentionally left untouched.
+If the baseline is already broken, say so before changing code and define success relative to that baseline — don't claim full verification while unrelated failures remain.
+
+After any non-trivial task, briefly note: what changed, what was verified, what remains unverified, and problems noticed but intentionally left untouched. If a task can't be fully completed, deliver what's safe, label the incomplete part explicitly, and state the blocker before stopping.
 
 ### Hard Stops
 
@@ -159,9 +174,14 @@ Never, unless explicitly authorized:
 - Modify environment files (`.env`, secrets, credentials).
 - Silently change a function's signature, return type, or error contract.
 - Catch and suppress exceptions (empty catch blocks, swallowed return codes).
+- Introduce global or shared mutable state.
 - Deliver incomplete or stub implementations without labeling them explicitly.
 
 When a hard stop applies, say so and do not proceed until authorized.
+
+### Documentation
+
+Write docs/comments only when complexity demands it: explain the why, not the what; update docs when the behavior they describe changes; give public APIs and shared interfaces usage examples. Skip it when the code already says it clearly, when it just restates the function name, or when it'll rot faster than the code it describes.
 
 
 
