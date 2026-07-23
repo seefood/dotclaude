@@ -160,7 +160,7 @@
   },
   "skipDangerousModePermissionPrompt": true,
   "statusLine": {
-    "command": "~/.claude/statusline-command.sh",
+    "command": "~/.claude/super-status/statusline.sh",
     "refreshInterval": 30,
     "type": "command"
   },
