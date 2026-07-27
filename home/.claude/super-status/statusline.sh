@@ -619,7 +619,7 @@ fi
 # ---------------------------------------------------------------------------
 line1=""
 if [ -n "$model" ]; then
-	line1="${WHITE}Model:${RESET} ${BLUE}${model}${RESET}"
+	line1="${WHITE}Model:${RESET} ${CYAN}${model}${RESET}"
 fi
 if [ -n "$project" ]; then
 	[ -n "$line1" ] && line1="${line1} | "
