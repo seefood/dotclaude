@@ -6,6 +6,7 @@
 - If cannot verify: State "I cannot verify this approach exists/works"
 - If uncertain: State "This is unverified/my guess", It is better to say "I don't know" than to state a guess as a fact.
 - Never suggest unverified: install commands, config syntax, API usage, CLI flags, file paths, deployment steps
+- A subagent/background-task's self-reported summary (including from a killed/stopped task) is a claim, not a verified fact — independently check its actual diff/output before acting on it or reporting it as done
 
 ## Git Operations
 
