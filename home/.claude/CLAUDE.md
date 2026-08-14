@@ -28,6 +28,10 @@
 - Fix all linting/type errors before considering task complete
 - Apply to any file created/modified
 
+## Bash Tool Usage
+
+- Never prefix a command with `cd <dir> ;`/`&&` when the shell is already in that directory — a compound command triggers an extra permission prompt even when the plain command would be auto-allowed. Only `cd` when the target genuinely differs from cwd; prefer `git -C <dir>` or a tool's own `--cwd`/directory flag over `cd` when a different directory is truly needed.
+
 ## Communication
 
 - Show expanded todo list by default
