@@ -12,6 +12,7 @@
     "json-to-toon@ira-claude-plugins": true,
     "pr-review-toolkit@claude-plugins-official": true,
     "security-guidance@claude-plugins-official": true,
+    "settings-curator@ira-claude-plugins": true,
     "superpowers@claude-plugins-official": true,
     "test-before-install@ira-claude-plugins": true
   },
@@ -48,6 +49,41 @@
           }
         ],
         "matcher": ""
+      },
+      {
+        "hooks": [
+          {
+            "command": "/Users/ira/.config/iterm2/cc-status",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node '/Users/ira/.claude/statusbar/update.js' notify",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "command": "/Users/ira/.config/iterm2/cc-status",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node '/Users/ira/.claude/statusbar/update.js' permreq",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
       }
     ],
     "PostToolUse": [
@@ -59,6 +95,23 @@
           }
         ],
         "matcher": "Edit|MultiEdit"
+      },
+      {
+        "hooks": [
+          {
+            "command": "/Users/ira/.config/iterm2/cc-status",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node '/Users/ira/.claude/statusbar/update.js' post",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
       }
     ],
     "PreToolUse": [
@@ -70,9 +123,60 @@
           }
         ],
         "matcher": "Bash"
+      },
+      {
+        "hooks": [
+          {
+            "command": "/Users/ira/.config/iterm2/cc-status",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node '/Users/ira/.claude/statusbar/update.js' pre",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "/Users/ira/.config/iterm2/cc-status",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node '/Users/ira/.claude/statusbar/lifecycle.js' end",
+            "type": "command"
+          }
+        ]
       }
     ],
     "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "/Users/ira/.config/iterm2/cc-status",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node '/Users/ira/.claude/statusbar/lifecycle.js' start",
+            "type": "command"
+          }
+        ]
+      }
     ],
     "Stop": [
       {
@@ -92,9 +196,43 @@
           }
         ],
         "matcher": "*"
+      },
+      {
+        "hooks": [
+          {
+            "command": "/Users/ira/.config/iterm2/cc-status",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node '/Users/ira/.claude/statusbar/update.js' stop",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "command": "/Users/ira/.config/iterm2/cc-status",
+            "type": "command"
+          }
+        ]
       }
     ],
     "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "command": "/Users/ira/.config/iterm2/cc-status",
+            "type": "command"
+          }
+        ]
+      }
     ],
     "UserPromptSubmit": [
       {
@@ -109,6 +247,22 @@
           }
         ],
         "matcher": "*"
+      },
+      {
+        "hooks": [
+          {
+            "command": "/Users/ira/.config/iterm2/cc-status",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node '/Users/ira/.claude/statusbar/update.js' prompt",
+            "type": "command"
+          }
+        ]
       }
     ]
   },
@@ -160,6 +314,7 @@
     ]
   },
   "skipDangerousModePermissionPrompt": true,
+  "skipWorkflowUsageWarning": true,
   "statusLine": {
     "command": "~/.claude/super-status/statusline.sh",
     "refreshInterval": 30,
