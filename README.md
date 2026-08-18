@@ -12,18 +12,13 @@ installing it on another machine.
 
 ## Companion repositories
 
-- [`../dotfiles`](../dotfiles/README.md) / [seefood/dotfiles](https://github.com/seefood/dotfiles)
+- [My dotfiles](https://github.com/seefood/dotfiles)
   is the broader homeshick castle for shell, editor, and general home-directory
   configuration. Claude Code configuration was moved out of that castle into
   this repository in July 2026.
-- The skills companion is currently [`../ira-claude-plugins`](../ira-claude-plugins/README.md) /
-  [seefood/ira-claude-plugins](https://github.com/seefood/ira-claude-plugins).
+- The skills companion is [My claude plugins](https://github.com/seefood/ira-claude-plugins).
   It publishes self-authored Claude Code skills as an installable plugin
   marketplace. It is separate from the locked skill snapshots stored here.
-
-There is no `../ira-claude-skills` checkout in the repository's current
-homeshick directory; use `ira-claude-plugins` for the skills marketplace
-referenced by this configuration.
 
 ## Installation
 
@@ -38,14 +33,11 @@ Then clone and symlink this castle:
 
 ```bash
 homeshick clone seefood/dotclaude
-homeshick symlink dotclaude
+homeshick link dotclaude
 ```
 
-The symlink maps:
+The symlink maps files under `home/.claude/` to your  `~/.claude/`
 
-```text
-home/.claude/  ->  ~/.claude/
-```
 
 To remove the symlinks without deleting the castle checkout:
 
