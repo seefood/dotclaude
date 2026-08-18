@@ -6,8 +6,8 @@ A personal [homeshick](https://github.com/andsens/homeshick) castle for
 symlinked.
 
 This castle is intentionally personal rather than a portable default
-configuration. Some settings refer to local macOS, Homebrew, iTerm2, and
-absolute `/Users/ira/...` paths; review `home/.claude/settings.json` before
+configuration. Some settings might accidentally refer to local macOS, Homebrew, iTerm2, and
+absolute `/Users/ira/...` paths (but I try to notice nd fix them); review `home/.claude/settings.json` before
 installing it on another machine.
 
 ## Companion repositories
