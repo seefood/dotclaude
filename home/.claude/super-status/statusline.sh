@@ -64,6 +64,7 @@ cfg_external_usage_max_age=1800
 cfg_show_model=1
 cfg_show_repo=1
 cfg_show_branch=1
+cfg_show_cwd=1
 cfg_show_worktree=1
 cfg_show_lines_changed=1
 cfg_show_version=1
@@ -102,6 +103,7 @@ cfg_color_label=""
 cfg_color_model=""
 cfg_color_repo=""
 cfg_color_branch=""
+cfg_color_cwd=""
 cfg_color_muted=""
 cfg_color_accent=""
 cfg_color_bar_filled=""
@@ -110,8 +112,8 @@ cfg_color_bar_empty=""
 # Layout presets: lines separated by "|", segments within a line by ",".
 # A custom "lines" array in config.json overrides either preset, which is how
 # element reordering and merging elements onto shared lines is expressed.
-LAYOUT_EXPANDED="model,agent,repo,branch,worktree,lines_changed,version|subscription,sessions,balance|context,cache_ratio,cost,total_tokens|loc,session_time,thinking_time,efficiency,tool_calls|activity|agents|todos|orchestrator"
-LAYOUT_COMPACT="model,agent,repo,branch,worktree,context|subscription,sessions,balance,cost|activity,agents,todos,orchestrator"
+LAYOUT_EXPANDED="model,agent,repo,branch,cwd,worktree,lines_changed,version|subscription,sessions,balance|context,cache_ratio,cost,total_tokens|loc,session_time,thinking_time,efficiency,tool_calls|activity|agents|todos|orchestrator"
+LAYOUT_COMPACT="model,agent,repo,branch,cwd,worktree,context|subscription,sessions,balance,cost|activity,agents,todos,orchestrator"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -549,7 +551,7 @@ apply_preset() {
 		done
 		;;
 	minimal)
-		for _v in repo worktree lines_changed version git_dirty git_ahead_behind \
+		for _v in repo cwd worktree lines_changed version git_dirty git_ahead_behind \
 			git_file_stats provider subscription cost total_tokens loc \
 			session_time thinking_time cache_ratio efficiency tool_calls \
 			activity agents todos orchestrator; do
@@ -612,14 +614,14 @@ if [ -f "$CONFIG_FILE" ]; then
 			display_*)
 				_b=$(to_bool "$_v") || continue
 				case "${_k#display_}" in
-				model | repo | branch | worktree | lines_changed | version | git_dirty | git_ahead_behind | git_file_stats | provider | subscription | sessions | balance | context | cost | total_tokens | loc | session_time | thinking_time | cache_ratio | efficiency | tool_calls | activity | agents | todos | orchestrator)
+				model | repo | branch | cwd | worktree | lines_changed | version | git_dirty | git_ahead_behind | git_file_stats | provider | subscription | sessions | balance | context | cost | total_tokens | loc | session_time | thinking_time | cache_ratio | efficiency | tool_calls | activity | agents | todos | orchestrator)
 					printf -v "cfg_show_${_k#display_}" '%s' "$_b"
 					;;
 				esac
 				;;
 			color_*)
 				case "${_k#color_}" in
-				label | model | repo | branch | muted | accent | bar_filled | bar_empty)
+				label | model | repo | branch | cwd | muted | accent | bar_filled | bar_empty)
 					printf -v "cfg_color_${_k#color_}" '%s' "$_v"
 					;;
 				esac
@@ -647,6 +649,7 @@ C_LABEL="$WHITE"
 C_MODEL="$GREEN"
 C_REPO="$WHITE"
 C_BRANCH="$WHITE"
+C_CWD="$WHITE"
 C_MUTED="$GREY"
 C_ACCENT="$ORANGE"
 C_BAR_FILLED=""
@@ -655,6 +658,7 @@ _c=$(resolve_color "$cfg_color_label") && C_LABEL="$_c"
 _c=$(resolve_color "$cfg_color_model") && C_MODEL="$_c"
 _c=$(resolve_color "$cfg_color_repo") && C_REPO="$_c"
 _c=$(resolve_color "$cfg_color_branch") && C_BRANCH="$_c"
+_c=$(resolve_color "$cfg_color_cwd") && C_CWD="$_c"
 _c=$(resolve_color "$cfg_color_muted") && C_MUTED="$_c"
 _c=$(resolve_color "$cfg_color_accent") && C_ACCENT="$_c"
 _c=$(resolve_color "$cfg_color_bar_filled") && C_BAR_FILLED="$_c"
@@ -1670,6 +1674,33 @@ else
 	seg_worktree="$_worktree_part"
 fi
 
+seg_cwd=""
+if [ "$cfg_show_cwd" = "1" ] && [ -n "$cwd" ]; then
+	_cwd_display=""
+	if [ -n "$git_branch" ]; then
+		if [ -d "$cwd" ] && _git_prefix=$(GIT_OPTIONAL_LOCKS=0 git -C "$cwd" rev-parse --show-prefix 2>/dev/null); then
+			if [ -n "$_git_prefix" ]; then
+				_cwd_display="${_git_prefix%/}"
+			else
+				_cwd_display="."
+			fi
+		fi
+		if [ -z "$_cwd_display" ]; then
+			_norm_cwd="${cwd%/}"
+			[ -z "$_norm_cwd" ] && _norm_cwd="/"
+			_norm_root="${git_root%/}"
+			[ -z "$_norm_root" ] && _norm_root="/"
+			if [ "$_norm_cwd" = "$_norm_root" ]; then
+				_cwd_display="."
+			elif [[ "$_norm_cwd" == "$_norm_root"/* ]]; then
+				_cwd_display="${_norm_cwd#"$_norm_root"/}"
+			fi
+		fi
+	fi
+	[ -z "$_cwd_display" ] && _cwd_display="${cwd/#$HOME/\~}"
+	seg_cwd="${C_CWD}${_cwd_display}${RESET}"
+fi
+
 # Straight from Claude Code's own cost.total_lines_added/removed — this only
 # reflects edits made by this session's own tools (not sub-agents or nested
 # repos), but it's what Claude Code itself reports, so it's never stale.
@@ -1939,6 +1970,7 @@ segment_value() {
 	model) printf '%s' "$seg_model" ;;
 	repo) printf '%s' "$seg_repo" ;;
 	branch) printf '%s' "$seg_branch" ;;
+	cwd) printf '%s' "$seg_cwd" ;;
 	worktree) printf '%s' "$seg_worktree" ;;
 	agent) printf '%s' "$seg_agent" ;;
 	lines_changed) printf '%s' "$seg_lines_changed" ;;
