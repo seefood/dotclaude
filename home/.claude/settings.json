@@ -281,6 +281,7 @@
       "Bash(* --help *)"
     ],
     "deny": [
+      "Bash(brew install *)",
       "Bash(rm -rf *)",
       "Bash(rm -fr *)",
       "Bash(sudo *)",
@@ -318,7 +319,7 @@
   "skipWorkflowUsageWarning": true,
   "statusLine": {
     "command": "~/.claude/super-status/statusline.sh",
-    "refreshInterval": 30,
+    "refreshInterval": 10,
     "type": "command"
   },
   "terminalProgressBarEnabled": false,
