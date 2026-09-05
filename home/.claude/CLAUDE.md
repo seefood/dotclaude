@@ -187,7 +187,3 @@ When a hard stop applies, say so and do not proceed until authorized.
 ### Documentation
 
 Write docs/comments only when complexity demands it: explain the why, not the what; update docs when the behavior they describe changes; give public APIs and shared interfaces usage examples. Skip it when the code already says it clearly, when it just restates the function name, or when it'll rot faster than the code it describes.
-
-
-
-@RTK.md

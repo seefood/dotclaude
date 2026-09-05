@@ -5,15 +5,15 @@
   "enableAllProjectMcpServers": false,
   "enabledPlugins": {
     "claude-md-management@claude-plugins-official": false,
-    "code-review@claude-plugins-official": true,
-    "code-simplifier@claude-plugins-official": true,
-    "debugging-with-the-scientific-method@ira-claude-plugins": true,
+    "code-review@claude-plugins-official": false,
+    "code-simplifier@claude-plugins-official": false,
+    "debugging-with-the-scientific-method@ira-claude-plugins": false,
     "greptile@claude-plugins-official": false,
     "hookify@claude-plugins-official": false,
     "json-to-toon@ira-claude-plugins": false,
     "pr-review-toolkit@claude-plugins-official": false,
     "security-guidance@claude-plugins-official": true,
-    "settings-curator@ira-claude-plugins": true,
+    "settings-curator@ira-claude-plugins": false,
     "superpowers@claude-plugins-official": true,
     "test-before-install@ira-claude-plugins": true
   },
@@ -315,6 +315,12 @@
       "Read(~/Library/Application Support/**/solflare*/**)"
     ]
   },
+  "skillOverrides": {
+    "brainstorming": "off",
+    "challenger": "off",
+    "nfr-analyst": "off",
+    "owasp-security": "off"
+  },
   "skipDangerousModePermissionPrompt": true,
   "skipWorkflowUsageWarning": true,
   "statusLine": {
@@ -323,6 +329,7 @@
     "type": "command"
   },
   "terminalProgressBarEnabled": false,
+  "tui": "default",
   "verbose": true,
   "voiceEnabled": true
 }
