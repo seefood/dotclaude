@@ -62,6 +62,7 @@ cfg_external_usage_path=""
 cfg_external_usage_max_age=1800
 
 cfg_show_model=1
+cfg_show_effort=1
 cfg_show_repo=1
 cfg_show_branch=1
 cfg_show_cwd=1
@@ -614,7 +615,7 @@ if [ -f "$CONFIG_FILE" ]; then
 			display_*)
 				_b=$(to_bool "$_v") || continue
 				case "${_k#display_}" in
-				model | repo | branch | cwd | worktree | lines_changed | version | git_dirty | git_ahead_behind | git_file_stats | provider | subscription | sessions | balance | context | cost | total_tokens | loc | session_time | thinking_time | cache_ratio | efficiency | tool_calls | activity | agents | todos | orchestrator)
+				model | effort | repo | branch | cwd | worktree | lines_changed | version | git_dirty | git_ahead_behind | git_file_stats | provider | subscription | sessions | balance | context | cost | total_tokens | loc | session_time | thinking_time | cache_ratio | efficiency | tool_calls | activity | agents | todos | orchestrator)
 					printf -v "cfg_show_${_k#display_}" '%s' "$_b"
 					;;
 				esac
@@ -709,6 +710,7 @@ esac
 # Claude Code and Google Antigravity CLI (agy).
 # ---------------------------------------------------------------------------
 model=""
+effort_level=""
 project_dir=""
 cwd=""
 current_dir=""
@@ -738,6 +740,7 @@ is_agy_marker=""
 while IFS=$'	' read -r _k _v; do
 	case "$_k" in
 	model) model="$_v" ;;
+	effort_level) effort_level="$_v" ;;
 	project_dir) project_dir="$_v" ;;
 	cwd) cwd="$_v" ;;
 	current_dir) current_dir="$_v" ;;
@@ -768,6 +771,7 @@ done <<<"$(jq -r '
     def s(v): if v == null then "" else (v | tostring) end;
     [
       ["model", s(.model.display_name // .model.name // .model.id // .model)],
+      ["effort_level", s(.effort.level)],
       ["project_dir", s(.workspace.project_dir // .workspace.current_dir // .workspace // .workspaceUris[0])],
       ["cwd", s(.cwd // .workspace.current_dir // .workspace // .workspaceUris[0])],
       ["current_dir", s(.workspace.current_dir // .workspace // .workspaceUris[0])],
@@ -1616,6 +1620,10 @@ seg_model=""
 if [ "$cfg_show_model" = "1" ] && [ -n "$model" ]; then
 	seg_model="${C_MODEL}${L_MODEL} ${model}${RESET}"
 	[ -n "$provider_badge" ] && seg_model="${seg_model} $(muted "[${provider_badge}]")"
+	if [ "$cfg_show_effort" = "1" ] && [ -n "$effort_level" ]; then
+		_effort_display="$(tr '[:lower:]' '[:upper:]' <<<"${effort_level:0:1}")${effort_level:1}"
+		seg_model="${seg_model} $(muted "[${_effort_display}]")"
+	fi
 fi
 
 # Branch decorations (dirty marker, ahead/behind, file stats) build once here;
