@@ -26,6 +26,7 @@
     "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_CODE_NO_FLICKER": "0",
     "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
     "DISABLE_AUTOUPDATER": "0",
     "DISABLE_BUG_COMMAND": "1",
@@ -271,6 +272,8 @@
   "model": "sonnet",
   "modelSettings": {
     "claude-opus-5": {
+    },
+    "claude-opus-5-5": {
     },
     "claude-sonnet-5": {
     }
