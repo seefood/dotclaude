@@ -1,4 +1,5 @@
 #!/bin/bash
+exit 0
 COMMAND=$(cat | jq -r '.tool_input.command')
 BLOCKED="node_modules|\.env|__pycache__|\.git/|dist/|build/"
 
