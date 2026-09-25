@@ -9,7 +9,6 @@
     "code-review@claude-plugins-official": false,
     "code-simplifier@claude-plugins-official": false,
     "debugging-with-the-scientific-method@ira-claude-plugins": false,
-    "greptile@claude-plugins-official": false,
     "hookify@claude-plugins-official": false,
     "json-to-toon@ira-claude-plugins": false,
     "pr-review-toolkit@claude-plugins-official": false,
@@ -87,6 +86,14 @@
           }
         ],
         "matcher": "*"
+      },
+      {
+        "hooks": [
+          {
+            "command": "[ -n \"$WEZTERM_PANE\" ] && curl -sf --unix-socket \"$HOME/.local/state/blinkenkeys/api.sock\" -X PUT \"http://localhost/devices/uid-440d6644c3b0438c/keys/0,$(( WEZTERM_PANE % 4 ))\" -H 'Content-Type: application/json' -d '{\"state\":\"claude/waiting\"}' 2>/dev/null || true",
+            "type": "command"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -161,6 +168,14 @@
             "type": "command"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "[ -n \"$WEZTERM_PANE\" ] && curl -sf --unix-socket \"$HOME/.local/state/blinkenkeys/api.sock\" -X PUT \"http://localhost/devices/uid-440d6644c3b0438c/keys/0,$(( WEZTERM_PANE % 4 ))\" -H 'Content-Type: application/json' -d '{\"color\":\"#000000\"}' 2>/dev/null || true",
+            "type": "command"
+          }
+        ]
       }
     ],
     "SessionStart": [
@@ -176,6 +191,14 @@
         "hooks": [
           {
             "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node ~/'.claude/statusbar/lifecycle.js' start",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "[ -n \"$WEZTERM_PANE\" ] && curl -sf --unix-socket \"$HOME/.local/state/blinkenkeys/api.sock\" -X PUT \"http://localhost/devices/uid-440d6644c3b0438c/keys/0,$(( WEZTERM_PANE % 4 ))\" -H 'Content-Type: application/json' -d '{\"state\":\"claude/idle\"}' 2>/dev/null || true",
             "type": "command"
           }
         ]
@@ -215,6 +238,14 @@
             "type": "command"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "[ -n \"$WEZTERM_PANE\" ] && curl -sf --unix-socket \"$HOME/.local/state/blinkenkeys/api.sock\" -X PUT \"http://localhost/devices/uid-440d6644c3b0438c/keys/0,$(( WEZTERM_PANE % 4 ))\" -H 'Content-Type: application/json' -d '{\"state\":\"claude/idle\"}' 2>/dev/null || true",
+            "type": "command"
+          }
+        ]
       }
     ],
     "StopFailure": [
@@ -243,10 +274,6 @@
           {
             "command": "claudekit-hooks run codebase-map",
             "type": "command"
-          },
-          {
-            "command": "claudekit-hooks run thinking-level",
-            "type": "command"
           }
         ],
         "matcher": "*"
@@ -263,6 +290,14 @@
         "hooks": [
           {
             "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node ~/'.claude/statusbar/update.js' prompt",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "[ -n \"$WEZTERM_PANE\" ] && curl -sf --unix-socket \"$HOME/.local/state/blinkenkeys/api.sock\" -X PUT \"http://localhost/devices/uid-440d6644c3b0438c/keys/0,$(( WEZTERM_PANE % 4 ))\" -H 'Content-Type: application/json' -d '{\"state\":\"claude/working\"}' 2>/dev/null || true",
             "type": "command"
           }
         ]
@@ -325,10 +360,69 @@
     ]
   },
   "skillOverrides": {
+    "agents-md:cli": "off",
+    "agents-md:init": "off",
+    "agents-md:migration": "off",
+    "all-tools": "name-only",
     "brainstorming": "off",
     "challenger": "on",
+    "checkpoint:create": "off",
+    "checkpoint:list": "off",
+    "checkpoint:restore": "off",
+    "cleanproject": "off",
+    "code-review": "name-only",
+    "commit": "name-only",
+    "config:bash-timeout": "name-only",
+    "containerize-application": "name-only",
+    "contributing": "name-only",
+    "create-architecture-documentation": "name-only",
+    "create-command": "off",
+    "create-onboarding-guide": "off",
+    "create-prd": "off",
+    "create-subagent": "off",
+    "create-todos": "off",
+    "dev:cleanup": "off",
+    "docs": "off",
+    "explain-code": "name-only",
+    "explain-like-senior": "name-only",
+    "find-todos": "off",
+    "fix-imports": "user-invocable-only",
+    "fix-todos": "off",
+    "format": "off",
+    "generate-tests": "off",
+    "gh:repo-init": "off",
+    "git-status": "off",
+    "git:checkout": "off",
+    "git:commit": "off",
+    "git:ignore-init": "off",
+    "git:push": "off",
+    "git:status": "off",
+    "implement": "off",
+    "make-it-pretty": "off",
     "nfr-analyst": "off",
-    "owasp-security": "on"
+    "owasp-security": "off",
+    "predict-issues": "name-only",
+    "rate-me": "name-only",
+    "refactor": "off",
+    "remove-comments": "off",
+    "research": "off",
+    "review": "off",
+    "scaffold": "off",
+    "security-scan": "name-only",
+    "session-end": "off",
+    "session-start": "off",
+    "spec:create": "off",
+    "spec:decompose": "off",
+    "spec:execute": "off",
+    "spec:validate": "off",
+    "test": "off",
+    "test-coverage": "off",
+    "todo": "name-only",
+    "todos-to-issues": "off",
+    "ultra-think": "off",
+    "understand": "off",
+    "undo": "off",
+    "validate-and-fix": "off"
   },
   "skipDangerousModePermissionPrompt": true,
   "skipWorkflowUsageWarning": true,
