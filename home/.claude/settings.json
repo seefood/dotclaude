@@ -48,20 +48,11 @@
           {
             "command": "~/.claude/hooks/play-sound.sh notification",
             "type": "command"
-          }
-        ],
-        "matcher": ""
-      },
-      {
-        "hooks": [
+          },
           {
             "command": "~/.config/iterm2/cc-status",
             "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
+          },
           {
             "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node ${HOME}'/.claude/statusbar/update.js' notify",
             "type": "command"
@@ -75,20 +66,11 @@
           {
             "command": "${HOME}/.config/iterm2/cc-status",
             "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
+          },
           {
             "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node ${HOME}'/.claude/statusbar/update.js' permreq",
             "type": "command"
-          }
-        ],
-        "matcher": "*"
-      },
-      {
-        "hooks": [
+          },
           {
             "command": "[ -n \"$WEZTERM_PANE\" ] && curl -sf --unix-socket \"$HOME/.local/state/blinkenkeys/api.sock\" -X PUT \"http://localhost/devices/uid-440d6644c3b0438c/keys/0,$(( WEZTERM_PANE % 4 ))\" -H 'Content-Type: application/json' -d '{\"state\":\"claude/waiting\"}' 2>/dev/null || true",
             "type": "command"
@@ -111,11 +93,7 @@
           {
             "command": "${HOME}/.config/iterm2/cc-status",
             "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
+          },
           {
             "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node ${HOME}'/.claude/statusbar/update.js' post",
             "type": "command"
@@ -158,19 +136,11 @@
           {
             "command": "~/.config/iterm2/cc-status",
             "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
+          },
           {
             "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node ~/'.claude/statusbar/lifecycle.js' end",
             "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
+          },
           {
             "command": "[ -n \"$WEZTERM_PANE\" ] && curl -sf --unix-socket \"$HOME/.local/state/blinkenkeys/api.sock\" -X PUT \"http://localhost/devices/uid-440d6644c3b0438c/keys/0,$(( WEZTERM_PANE % 4 ))\" -H 'Content-Type: application/json' -d '{\"color\":\"#000000\"}' 2>/dev/null || true",
             "type": "command"
@@ -184,19 +154,11 @@
           {
             "command": "~/.config/iterm2/cc-status",
             "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
+          },
           {
             "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node ~/'.claude/statusbar/lifecycle.js' start",
             "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
+          },
           {
             "command": "[ -n \"$WEZTERM_PANE\" ] && curl -sf --unix-socket \"$HOME/.local/state/blinkenkeys/api.sock\" -X PUT \"http://localhost/devices/uid-440d6644c3b0438c/keys/0,$(( WEZTERM_PANE % 4 ))\" -H 'Content-Type: application/json' -d '{\"state\":\"claude/idle\"}' 2>/dev/null || true",
             "type": "command"
@@ -210,37 +172,19 @@
           {
             "command": "~/.claude/hooks/play-sound.sh",
             "type": "command"
-          }
-        ],
-        "matcher": ""
-      },
-      {
-        "hooks": [
+          },
           {
             "command": "claudekit-hooks run self-review",
             "type": "command"
-          }
-        ],
-        "matcher": "*"
-      },
-      {
-        "hooks": [
+          },
           {
             "command": "~/.config/iterm2/cc-status",
             "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
+          },
           {
             "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node ~/'.claude/statusbar/update.js' stop",
             "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
+          },
           {
             "command": "[ -n \"$WEZTERM_PANE\" ] && curl -sf --unix-socket \"$HOME/.local/state/blinkenkeys/api.sock\" -X PUT \"http://localhost/devices/uid-440d6644c3b0438c/keys/0,$(( WEZTERM_PANE % 4 ))\" -H 'Content-Type: application/json' -d '{\"state\":\"claude/idle\"}' 2>/dev/null || true",
             "type": "command"
@@ -272,30 +216,13 @@
       {
         "hooks": [
           {
-            "command": "claudekit-hooks run codebase-map",
-            "type": "command"
-          }
-        ],
-        "matcher": "*"
-      },
-      {
-        "hooks": [
-          {
             "command": "~/.config/iterm2/cc-status",
             "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
+          },
           {
             "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node ~/'.claude/statusbar/update.js' prompt",
             "type": "command"
-          }
-        ]
-      },
-      {
-        "hooks": [
+          },
           {
             "command": "[ -n \"$WEZTERM_PANE\" ] && curl -sf --unix-socket \"$HOME/.local/state/blinkenkeys/api.sock\" -X PUT \"http://localhost/devices/uid-440d6644c3b0438c/keys/0,$(( WEZTERM_PANE % 4 ))\" -H 'Content-Type: application/json' -d '{\"state\":\"claude/working\"}' 2>/dev/null || true",
             "type": "command"
