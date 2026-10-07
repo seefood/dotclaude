@@ -72,7 +72,7 @@
             "type": "command"
           },
           {
-            "command": "[ -n \"$WEZTERM_PANE\" ] && curl -sf --unix-socket \"$HOME/.local/state/blinkenkeys/api.sock\" -X PUT \"http://localhost/devices/uid-440d6644c3b0438c/keys/0,$(( WEZTERM_PANE % 4 ))\" -H 'Content-Type: application/json' -d '{\"state\":\"claude/waiting\"}' 2>/dev/null || true",
+            "command": "$HOME/.local/bin/blincli set -s claude/waiting",
             "type": "command"
           }
         ]
@@ -142,7 +142,7 @@
             "type": "command"
           },
           {
-            "command": "[ -n \"$WEZTERM_PANE\" ] && curl -sf --unix-socket \"$HOME/.local/state/blinkenkeys/api.sock\" -X PUT \"http://localhost/devices/uid-440d6644c3b0438c/keys/0,$(( WEZTERM_PANE % 4 ))\" -H 'Content-Type: application/json' -d '{\"color\":\"#000000\"}' 2>/dev/null || true",
+            "command": "$HOME/.local/bin/blincli clear",
             "type": "command"
           }
         ]
@@ -160,7 +160,7 @@
             "type": "command"
           },
           {
-            "command": "[ -n \"$WEZTERM_PANE\" ] && curl -sf --unix-socket \"$HOME/.local/state/blinkenkeys/api.sock\" -X PUT \"http://localhost/devices/uid-440d6644c3b0438c/keys/0,$(( WEZTERM_PANE % 4 ))\" -H 'Content-Type: application/json' -d '{\"state\":\"claude/idle\"}' 2>/dev/null || true",
+            "command": "$HOME/.local/bin/blincli set -s claude/idle",
             "type": "command"
           }
         ]
@@ -186,7 +186,7 @@
             "type": "command"
           },
           {
-            "command": "[ -n \"$WEZTERM_PANE\" ] && curl -sf --unix-socket \"$HOME/.local/state/blinkenkeys/api.sock\" -X PUT \"http://localhost/devices/uid-440d6644c3b0438c/keys/0,$(( WEZTERM_PANE % 4 ))\" -H 'Content-Type: application/json' -d '{\"state\":\"claude/idle\"}' 2>/dev/null || true",
+            "command": "$HOME/.local/bin/blincli set -s claude/idle",
             "type": "command"
           }
         ]
@@ -224,7 +224,7 @@
             "type": "command"
           },
           {
-            "command": "[ -n \"$WEZTERM_PANE\" ] && curl -sf --unix-socket \"$HOME/.local/state/blinkenkeys/api.sock\" -X PUT \"http://localhost/devices/uid-440d6644c3b0438c/keys/0,$(( WEZTERM_PANE % 4 ))\" -H 'Content-Type: application/json' -d '{\"state\":\"claude/working\"}' 2>/dev/null || true",
+            "command": "$HOME/.local/bin/blincli set -s claude/working",
             "type": "command"
           }
         ]
