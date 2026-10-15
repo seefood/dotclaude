@@ -15,7 +15,8 @@
     "security-guidance@claude-plugins-official": true,
     "settings-curator@ira-claude-plugins": true,
     "superpowers@claude-plugins-official": true,
-    "test-before-install@ira-claude-plugins": true
+    "test-before-install@ira-claude-plugins": true,
+    "typesafe@typesafe-ai": false
   },
   "env": {
     "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "200000",
@@ -37,6 +38,12 @@
     "ira-claude-plugins": {
       "source": {
         "repo": "seefood/ira-claude-plugins",
+        "source": "github"
+      }
+    },
+    "typesafe-ai": {
+      "source": {
+        "repo": "typesafe-ai/skills",
         "source": "github"
       }
     }
@@ -107,6 +114,11 @@
         "hooks": [
           {
             "command": "~/.claude/scripts/validate-bash.sh",
+            "type": "command"
+          },
+          {
+            "command": "python3 -I /Users/ira/src/laya-local/gate/hook.py",
+            "timeout": 5,
             "type": "command"
           }
         ],
@@ -238,6 +250,8 @@
     "claude-opus-5-5": {
     },
     "claude-sonnet-5": {
+    },
+    "claude-sonnet-5-5": {
     }
   },
   "permissions": {
