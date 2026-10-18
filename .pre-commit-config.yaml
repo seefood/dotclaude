@@ -32,7 +32,9 @@ repos:
       - id: shellcheck
         exclude: ".bats$|zsh"
       - id: shfmt
-        exclude: "\\.bats$|^home/\\.claude/skills/(enhance|nfr-analyst|challenger)/"
+        # statusline.sh is a vendored copy of orassayag/super-status; keep it
+        # byte-identical to upstream (4-space indent) rather than tab-formatted.
+        exclude: "\\.bats$|^home/\\.claude/skills/(enhance|nfr-analyst|challenger)/|^home/\\.claude/super-status/statusline\\.sh$"
   - repo: https://github.com/Lucas-C/pre-commit-hooks
     rev: ad1b27d73581aa16cca06fc4a0761fc563ffe8e8  # frozen: v1.5.6
     hooks:
