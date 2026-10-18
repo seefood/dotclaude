@@ -47,7 +47,9 @@ repos:
       - id: json-sort
         args:
           - --autofix
-        exclude: "^home/\\.claude/skills/(enhance|nfr-analyst|challenger)/"
+        # super-status/config.json keeps its hand-grouped layout (mirrors the
+        # upstream README example), so don't alphabetize it.
+        exclude: "^home/\\.claude/skills/(enhance|nfr-analyst|challenger)/|^home/\\.claude/super-status/config\\.json$"
   - repo: local
     hooks:
       - id: shell-commons-bash-zsh-syntax

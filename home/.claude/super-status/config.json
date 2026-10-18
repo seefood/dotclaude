@@ -1,0 +1,60 @@
+{
+  "preset": "",
+  "language": "en",
+  "layout": "expanded",
+  "lines": [],
+  "right_align": [],
+  "bar_width": 10,
+  "bar_filled": "▮",
+  "bar_empty": "▪",
+  "path_levels": 1,
+  "max_width": 0,
+  "context_value": "both",
+  "auto_compact_window": 0,
+  "model_source": "stdin",
+  "model_params": {},
+  "external_usage_path": "",
+  "external_usage_max_age": 1800,
+  "external_usage_write_path": "",
+  "prompt_cache_ttl_seconds": 300,
+  "hyperlinks": false,
+  "added_dirs_max": 5,
+  "added_dirs_name_width": 24,
+  "added_dirs_layout": "inline",
+  "plan_label": "",
+  "subscription_start_date": "10/10/2026",
+  "api_credit_balance": null,
+  "api_credit_as_of": "",
+  "api_spend_cache_seconds": 300,
+  "model_pricing": {},
+  "display": {
+    "model": true, "mode": true, "repo": true, "branch": true, "cwd": true, "worktree": true,
+    "lines_changed": true, "version": true, "provider": true, "effort": true,
+    "git_dirty": false, "git_ahead_behind": false, "git_file_stats": false,
+    "subscription": true, "sessions": true, "balance": true,
+    "context": true, "cost": true, "total_tokens": true,
+    "loc": true, "session_time": true, "thinking_time": true,
+    "cache_ratio": true, "efficiency": true, "tool_calls": true,
+    "activity": false, "agents": false, "todos": false, "orchestrator": false,
+    "added_dirs": false, "prompt_cache": false, "today": false, "week": false,
+    "session_name": false, "usage_pace": false,
+    "compactions": false, "speed": false
+  },
+  "git": {
+    "push_warning_threshold": 3,
+    "push_critical_threshold": 10,
+    "timeout_seconds": 3
+  },
+  "jj": {
+    "enabled": false
+  },
+  "colors": {
+    "label": "", "model": "", "repo": "", "branch": "", "cwd": "",
+    "muted": "", "accent": "", "bar_filled": "", "bar_empty": ""
+  },
+  "thresholds": {
+    "context_warning": 70, "context_critical": 90,
+    "five_hour_warning": 70, "five_hour_critical": 90,
+    "seven_day_warning": 50, "seven_day_critical": 75
+  }
+}
