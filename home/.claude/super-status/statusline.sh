@@ -101,6 +101,10 @@ cfg_model_pricing_labels=()
 # thing that names Pro vs. Max — is null on most accounts, so plan_label is the
 # override that makes the tier visible.
 cfg_plan_label=""
+# Subscription cycle start, dd/MM/yyyy. Empty = fall back to CLAUDE.md. Kept raw
+# (not trimmed-to-valid) so a malformed value reports INVALID instead of silently
+# falling through to the CLAUDE.md lookup.
+cfg_subscription_start_date=""
 # Prepaid API credit bar. Anthropic publishes no credit-balance endpoint (the
 # Console's "Credit balance" card is not in the public API), so the balance is a
 # user-declared snapshot and everything spent since it comes from the Admin API
@@ -139,6 +143,9 @@ cfg_show_model=1
 cfg_show_mode=1
 cfg_show_repo=1
 cfg_show_branch=1
+# Working directory relative to the git root (or ~-abbreviated outside a repo).
+# Off by default like the other opt-in elements; "preset": "full" enables it.
+cfg_show_cwd=0
 cfg_show_worktree=1
 cfg_show_lines_changed=1
 cfg_show_version=1
@@ -186,6 +193,7 @@ cfg_color_label=""
 cfg_color_model=""
 cfg_color_repo=""
 cfg_color_branch=""
+cfg_color_cwd=""
 cfg_color_muted=""
 cfg_color_accent=""
 cfg_color_bar_filled=""
@@ -194,8 +202,8 @@ cfg_color_bar_empty=""
 # Layout presets: lines separated by "|", segments within a line by ",".
 # A custom "lines" array in config.json overrides either preset, which is how
 # element reordering and merging elements onto shared lines is expressed.
-LAYOUT_EXPANDED="mode,model,agent,repo,branch,worktree,lines_changed,version,session_name|added_dirs|subscription,sessions,balance|context,cache_ratio,prompt_cache,cost,today,week,total_tokens|loc,session_time,thinking_time,speed,efficiency,tool_calls,compactions|activity|agents|todos|orchestrator"
-LAYOUT_COMPACT="mode,model,agent,repo,branch,worktree,added_dirs,context|subscription,sessions,balance,cost,today,week|activity,agents,todos,orchestrator"
+LAYOUT_EXPANDED="mode,model,agent,repo,branch,cwd,worktree,lines_changed,version,session_name|added_dirs|subscription,sessions,balance|context,cache_ratio,prompt_cache,cost,today,week,total_tokens|loc,session_time,thinking_time,speed,efficiency,tool_calls,compactions|activity|agents|todos|orchestrator"
+LAYOUT_COMPACT="mode,model,agent,repo,branch,cwd,worktree,added_dirs,context|subscription,sessions,balance,cost,today,week|activity,agents,todos,orchestrator"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -1060,7 +1068,7 @@ apply_preset() {
 	local _v
 	case "$1" in
 	full)
-		for _v in git_dirty git_ahead_behind git_file_stats activity agents todos orchestrator \
+		for _v in cwd git_dirty git_ahead_behind git_file_stats activity agents todos orchestrator \
 			added_dirs prompt_cache today week session_name usage_pace compactions speed; do
 			printf -v "cfg_show_${_v}" '%s' 1
 		done
@@ -1075,7 +1083,7 @@ apply_preset() {
 		done
 		;;
 	minimal)
-		for _v in repo worktree lines_changed version git_dirty git_ahead_behind \
+		for _v in repo cwd worktree lines_changed version git_dirty git_ahead_behind \
 			git_file_stats provider mode subscription cost total_tokens loc \
 			session_time thinking_time cache_ratio efficiency tool_calls \
 			activity agents todos orchestrator added_dirs prompt_cache \
@@ -1106,6 +1114,7 @@ if [ -f "$CONFIG_FILE" ]; then
             ["auto_compact_window", s(.auto_compact_window)],
             ["model_source", s(.model_source)],
             ["plan_label", s(.plan_label)],
+            ["subscription_start_date", s(.subscription_start_date)],
             ["api_credit_balance", s(.api_credit_balance)],
             ["api_credit_as_of", s(.api_credit_as_of)],
             ["api_spend_cache_seconds", s(.api_spend_cache_seconds)],
@@ -1147,6 +1156,7 @@ if [ -f "$CONFIG_FILE" ]; then
 			auto_compact_window) is_num "$_v" && [ "${_v%.*}" -ge 1000 ] && cfg_auto_compact_window="${_v%.*}" ;;
 			model_source) case "$_v" in stdin | transcript | auto) cfg_model_source="$_v" ;; esac ;;
 			plan_label) [ -n "$_v" ] && cfg_plan_label=$(trim_ws "$_v") ;;
+			subscription_start_date) [ -n "$_v" ] && cfg_subscription_start_date=$(trim_ws "$_v") ;;
 			api_credit_balance) is_num "$_v" && cfg_api_credit_balance="$_v" ;;
 			api_credit_as_of) [ -n "$_v" ] && cfg_api_credit_as_of=$(trim_ws "$_v") ;;
 			api_spend_cache_seconds) is_num "$_v" && [ "${_v%.*}" -ge 60 ] && cfg_api_spend_cache_seconds="${_v%.*}" ;;
@@ -1181,14 +1191,14 @@ if [ -f "$CONFIG_FILE" ]; then
 			display_*)
 				_b=$(to_bool "$_v") || continue
 				case "${_k#display_}" in
-				model | mode | repo | branch | worktree | lines_changed | version | git_dirty | git_ahead_behind | git_file_stats | provider | effort | subscription | sessions | balance | context | cost | total_tokens | loc | session_time | thinking_time | cache_ratio | efficiency | tool_calls | activity | agents | todos | orchestrator | added_dirs | prompt_cache | today | week | session_name | usage_pace | compactions | speed)
+				model | mode | repo | branch | cwd | worktree | lines_changed | version | git_dirty | git_ahead_behind | git_file_stats | provider | effort | subscription | sessions | balance | context | cost | total_tokens | loc | session_time | thinking_time | cache_ratio | efficiency | tool_calls | activity | agents | todos | orchestrator | added_dirs | prompt_cache | today | week | session_name | usage_pace | compactions | speed)
 					printf -v "cfg_show_${_k#display_}" '%s' "$_b"
 					;;
 				esac
 				;;
 			color_*)
 				case "${_k#color_}" in
-				label | model | repo | branch | muted | accent | bar_filled | bar_empty)
+				label | model | repo | branch | cwd | muted | accent | bar_filled | bar_empty)
 					printf -v "cfg_color_${_k#color_}" '%s' "$_v"
 					;;
 				esac
@@ -1216,6 +1226,7 @@ C_LABEL="$WHITE"
 C_MODEL="$GREEN"
 C_REPO="$WHITE"
 C_BRANCH="$WHITE"
+C_CWD="$WHITE"
 C_MUTED="$GREY"
 C_ACCENT="$ORANGE"
 C_BAR_FILLED=""
@@ -1224,6 +1235,7 @@ _c=$(resolve_color "$cfg_color_label") && C_LABEL="$_c"
 _c=$(resolve_color "$cfg_color_model") && C_MODEL="$_c"
 _c=$(resolve_color "$cfg_color_repo") && C_REPO="$_c"
 _c=$(resolve_color "$cfg_color_branch") && C_BRANCH="$_c"
+_c=$(resolve_color "$cfg_color_cwd") && C_CWD="$_c"
 _c=$(resolve_color "$cfg_color_muted") && C_MUTED="$_c"
 _c=$(resolve_color "$cfg_color_accent") && C_ACCENT="$_c"
 _c=$(resolve_color "$cfg_color_bar_filled") && C_BAR_FILLED="$_c"
@@ -1274,8 +1286,8 @@ en | *)
 	L_MASTER="Master:"
 	L_RESET="Reset"
 	L_LEFT="left"
-	L_SUB_MISSING='SUBSCRIPTION START DATE IS MISSING - ADD IT TO THE CLAUDE.MD: "subscription_start_date": "dd/MM/yyyy"'
-	L_SUB_INVALID='SUBSCRIPTION START DATE IS INVALID - ADD IT TO THE CLAUDE.MD: "subscription_start_date": "dd/MM/yyyy"'
+	L_SUB_MISSING='SUBSCRIPTION START DATE IS MISSING - SET "subscription_start_date": "dd/MM/yyyy" IN SUPER-STATUS/CONFIG.JSON'
+	L_SUB_INVALID='SUBSCRIPTION START DATE IS INVALID - SET "subscription_start_date": "dd/MM/yyyy" IN SUPER-STATUS/CONFIG.JSON'
 	L_BAL_AS_OF="as of"
 	L_BAL_ESTIMATE="est."
 	L_BAL_DECLARED="declared"
@@ -2524,9 +2536,10 @@ is_num "$dur_ms" && session_dur_value=$(fmt_duration_ms "$dur_ms")
 # Subscription renewal cycle — Anthropic exposes no billing/renewal date in
 # the stdin JSON, so the start date is read from a user-declared
 #   "subscription_start_date": "dd/MM/yyyy"
-# line in CLAUDE.md — local project file first, then the global one. Local
-# wins; a found-but-invalid value short-circuits (does NOT fall through to
-# global). Subscription mode only: API-key/OpenRouter users have no cycle to
+# key in super-status/config.json, which wins; otherwise the same line in
+# CLAUDE.md — local project file first, then the global one (legacy). A
+# found-but-invalid value short-circuits (does NOT fall through to the next
+# source). Subscription mode only: API-key/OpenRouter users have no cycle to
 # track, so the whole feature (file reads, warning, bar) is inert for them.
 # ---------------------------------------------------------------------------
 SUBSCRIPTION_DATE_STATE=""
@@ -2534,6 +2547,15 @@ SUBSCRIPTION_START_RAW=""
 
 resolve_subscription_start_date() {
 	local _file _raw
+	if [ -n "$cfg_subscription_start_date" ]; then
+		if [ -n "$(parse_subscription_date "$cfg_subscription_start_date")" ]; then
+			SUBSCRIPTION_DATE_STATE="valid"
+			SUBSCRIPTION_START_RAW="$cfg_subscription_start_date"
+		else
+			SUBSCRIPTION_DATE_STATE="invalid"
+		fi
+		return
+	fi
 	for _file in "${git_root:+$git_root/CLAUDE.md}" "$CLAUDE_DIR/CLAUDE.md"; do
 		{ [ -n "$_file" ] && [ -f "$_file" ]; } || continue
 		_raw=$(grep -o '"subscription_start_date"[[:space:]]*:[[:space:]]*"[^"]*"' "$_file" 2>/dev/null | head -n1)
@@ -2679,6 +2701,33 @@ if [ -n "$_repo_part" ]; then
 else
 	seg_branch="$_branch_part"
 	seg_worktree="$_worktree_part"
+fi
+
+# Working directory: relative to the git root when inside a repository ("." at
+# the root itself), otherwise the absolute path with $HOME shortened to "~".
+seg_cwd=""
+if [ "$cfg_show_cwd" = "1" ] && [ -n "$cwd" ]; then
+	_cwd_display=""
+	if [ -n "$git_branch" ]; then
+		if [ -d "$cwd" ] && _git_prefix=$(git_run -C "$cwd" rev-parse --show-prefix); then
+			_cwd_display="${_git_prefix%/}"
+			[ -z "$_cwd_display" ] && _cwd_display="."
+		fi
+		if [ -z "$_cwd_display" ]; then
+			_norm_cwd="${cwd%/}"
+			[ -z "$_norm_cwd" ] && _norm_cwd="/"
+			_norm_root="${git_root%/}"
+			[ -z "$_norm_root" ] && _norm_root="/"
+			if [ "$_norm_cwd" = "$_norm_root" ]; then
+				_cwd_display="."
+			elif [[ "$_norm_cwd" == "$_norm_root"/* ]]; then
+				_cwd_display="${_norm_cwd#"$_norm_root"/}"
+			fi
+		fi
+	fi
+	[ -z "$_cwd_display" ] && _cwd_display="${cwd/#$HOME/\~}"
+	_cwd_display=$(sanitize_text "$_cwd_display")
+	[ -n "$_cwd_display" ] && seg_cwd="${C_CWD}${_cwd_display}${RESET}"
 fi
 
 # Each side is the larger of Claude Code's own counter (which also sees edits
@@ -3286,6 +3335,7 @@ segment_value() {
 	model) printf '%s' "$seg_model" ;;
 	repo) printf '%s' "$seg_repo" ;;
 	branch) printf '%s' "$seg_branch" ;;
+	cwd) printf '%s' "$seg_cwd" ;;
 	worktree) printf '%s' "$seg_worktree" ;;
 	agent) printf '%s' "$seg_agent" ;;
 	lines_changed) printf '%s' "$seg_lines_changed" ;;
