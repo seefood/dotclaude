@@ -13,6 +13,29 @@
 set -f
 export LC_NUMERIC=C
 
+# Under Git Bash/Cygwin, jq and python3 are usually native Windows binaries:
+# their text-mode stdout turns every \n into \r\n, and Python's stdio defaults
+# to cp1252. A stray \r on each value breaks every numeric check and match.
+# Without a UTF-8 locale, bash measures and slices strings in bytes and cuts
+# multi-byte glyphs in half.
+case "${OSTYPE:-}" in
+msys* | cygwin*)
+	export PYTHONUTF8=1
+	case "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" in
+	*[Uu][Tt][Ff]-8* | *[Uu][Tt][Ff]8*) ;;
+	*) export LC_CTYPE=C.UTF-8 ;;
+	esac
+	jq() {
+		command jq "$@" | tr -d '\r'
+		return "${PIPESTATUS[0]}"
+	}
+	python3() {
+		command python3 "$@" | tr -d '\r'
+		return "${PIPESTATUS[0]}"
+	}
+	;;
+esac
+
 # ---------------------------------------------------------------------------
 # Color constants (real ESC bytes via ANSI-C quoting, not re-interpreted later)
 # ---------------------------------------------------------------------------
@@ -60,12 +83,62 @@ cfg_model_source="stdin"
 # seconds fills the 5h/Nd bars. 0 path = disabled.
 cfg_external_usage_path=""
 cfg_external_usage_max_age=1800
+# Parameter-count badge rendered after the model name ("◆ Sonnet 5 (365B)").
+# Anthropic publishes no parameter counts for Claude models, so there is no
+# built-in table: this is a user-declared "model_params" map from a
+# case-insensitive substring of the displayed model name to the text to show.
+cfg_model_params_patterns=()
+cfg_model_params_labels=()
+# Per-MTok list-rate overrides for the local spend estimate, "pattern": "in/out"
+# (e.g. {"opus-5": "5/25"}). Matching is the same longest-substring-of-the-model-id
+# rule as model_params. Empty = the estimator's built-in table, which is Anthropic
+# list pricing at the time of writing and will drift as rates change.
+cfg_model_pricing_patterns=()
+cfg_model_pricing_labels=()
+# Account-mode badge — the identity line's leading segment ("API | ◆ Opus 5").
+# Auto-detection reads ~/.claude.json's oauthAccount.{billingType,seatTier}:
+# billingType separates API billing from a subscription, but seatTier — the only
+# thing that names Pro vs. Max — is null on most accounts, so plan_label is the
+# override that makes the tier visible.
+cfg_plan_label=""
+# Prepaid API credit bar. Anthropic publishes no credit-balance endpoint (the
+# Console's "Credit balance" card is not in the public API), so the balance is a
+# user-declared snapshot and everything spent since it comes from the Admin API
+# cost report. Empty balance = the whole feature is inert.
+cfg_api_credit_balance=""
+cfg_api_credit_as_of=""
+cfg_api_spend_cache_seconds=300
+# Seconds any single git (or jj) call may take before it is abandoned and the
+# segment degrades to "no repository here". Generous for local git, still well
+# inside a two-second refresh.
+cfg_git_timeout=3
+# Jujutsu. Off by default, and even when on it only takes over for a repository
+# that actually holds a .jj control directory — one system per repository,
+# never both on the line at once.
+cfg_jj_enabled=0
+# Extra working directories from /add-dir. added_dirs_layout is "inline"
+# (`super-status:main +shared-lib`) or "line" (a separate `Added dirs:` row).
+cfg_added_dirs_max=5
+cfg_added_dirs_name_width=24
+cfg_added_dirs_layout="inline"
+# Prompt-cache expiry. The tier is read from the transcript (a 5-minute vs.
+# 1-hour cache write); this is only the fallback for transcripts that record
+# neither, and never overrides one that does.
+cfg_prompt_cache_ttl_seconds=300
+# Opt-in producer side of external_usage_path: the authoritative rate-limit
+# windows that arrive free on stdin, written out for another tool to read.
+cfg_external_usage_write_path=""
+# OSC 8 hyperlinks on the activity line's file names.
+cfg_hyperlinks=0
+# Segment name at which a line's right-aligned run begins, as "line_index:name"
+# pairs are not needed — a bare segment name is matched on whichever line it
+# renders. Empty = every line packs left, as before.
+cfg_right_align=""
 
 cfg_show_model=1
-cfg_show_effort=1
+cfg_show_mode=1
 cfg_show_repo=1
 cfg_show_branch=1
-cfg_show_cwd=1
 cfg_show_worktree=1
 cfg_show_lines_changed=1
 cfg_show_version=1
@@ -73,7 +146,8 @@ cfg_show_git_dirty=0
 cfg_show_git_ahead_behind=0
 cfg_show_git_file_stats=0
 cfg_show_provider=1
-cfg_show_subscription=0
+cfg_show_effort=1
+cfg_show_subscription=1
 cfg_show_sessions=1
 cfg_show_balance=1
 cfg_show_context=1
@@ -89,6 +163,14 @@ cfg_show_activity=0
 cfg_show_agents=0
 cfg_show_todos=0
 cfg_show_orchestrator=0
+cfg_show_added_dirs=0
+cfg_show_prompt_cache=0
+cfg_show_today=0
+cfg_show_week=0
+cfg_show_session_name=0
+cfg_show_usage_pace=0
+cfg_show_compactions=0
+cfg_show_speed=0
 
 cfg_push_warning=3
 cfg_push_critical=10
@@ -104,7 +186,6 @@ cfg_color_label=""
 cfg_color_model=""
 cfg_color_repo=""
 cfg_color_branch=""
-cfg_color_cwd=""
 cfg_color_muted=""
 cfg_color_accent=""
 cfg_color_bar_filled=""
@@ -113,13 +194,25 @@ cfg_color_bar_empty=""
 # Layout presets: lines separated by "|", segments within a line by ",".
 # A custom "lines" array in config.json overrides either preset, which is how
 # element reordering and merging elements onto shared lines is expressed.
-LAYOUT_EXPANDED="model,agent,repo,branch,cwd,worktree,lines_changed,version|subscription,sessions,balance|context,cache_ratio,cost,total_tokens|loc,session_time,thinking_time,efficiency,tool_calls|activity|agents|todos|orchestrator"
-LAYOUT_COMPACT="model,agent,repo,branch,cwd,worktree,context|subscription,sessions,balance,cost|activity,agents,todos,orchestrator"
+LAYOUT_EXPANDED="mode,model,agent,repo,branch,worktree,lines_changed,version,session_name|added_dirs|subscription,sessions,balance|context,cache_ratio,prompt_cache,cost,today,week,total_tokens|loc,session_time,thinking_time,speed,efficiency,tool_calls,compactions|activity|agents|todos|orchestrator"
+LAYOUT_COMPACT="mode,model,agent,repo,branch,worktree,added_dirs,context|subscription,sessions,balance,cost,today,week|activity,agents,todos,orchestrator"
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 is_num() { [[ "$1" =~ ^-?[0-9]+([.][0-9]+)?$ ]]; }
+
+# SUPER_STATUS_DEBUG=1 traces where each value came from and why a segment came
+# out empty. Standard ERROR, never standard output: the statusline IS standard
+# output, so a trace written there would corrupt the display it is explaining.
+# This answers "why is this render empty"; doctor.sh answers "is the install
+# correct" — the two do not overlap.
+debug_log() {
+	if [ "${SUPER_STATUS_DEBUG:-0}" = "1" ]; then
+		printf 'super-status: %s\n' "$*" >&2
+	fi
+	return 0
+}
 
 to_bool() {
 	case "$1" in
@@ -253,9 +346,12 @@ humanize_model_id() {
 		return
 	}
 	id="${raw##*/}" # strip vertex "publishers/.../models/ID" paths
-	if [[ "$id" =~ ^[a-zA-Z0-9_-]+\.(claude|gemini) ]]; then
-		id="${id#*.}" # strip a leading "provider." prefix (Bedrock) safely
-	fi
+	# Strip leading "region.provider." segments (Bedrock, e.g. "us.anthropic.claude-...")
+	# one dot-segment at a time, stopping once the remaining segment is itself the
+	# model name — so a version dot in "gemini-1.5-pro" is never mistaken for one.
+	while [[ "$id" == *.* && "${id%%.*}" != *claude* && "${id%%.*}" != *gemini* ]]; do
+		id="${id#*.}"
+	done
 	case "$id" in
 	*claude* | *gemini*) ;;
 	*)
@@ -283,6 +379,32 @@ humanize_model_id() {
 	echo "${out# }"
 }
 
+# Parameter-count badge for a displayed model name, from the user-declared
+# model_params map. Matching is case-insensitive substring and the longest
+# matching pattern wins, so a specific "sonnet 5" beats a broader "sonnet"
+# regardless of the order they appear in config.json.
+model_params_label() {
+	local name="$1" lname idx pattern best="" best_len=0
+	[ -n "$name" ] || {
+		echo ""
+		return
+	}
+	lname=$(tr '[:upper:]' '[:lower:]' <<<"$name")
+	for idx in "${!cfg_model_params_patterns[@]}"; do
+		pattern=$(tr '[:upper:]' '[:lower:]' <<<"${cfg_model_params_patterns[$idx]}")
+		[ -n "$pattern" ] || continue
+		case "$lname" in
+		*"$pattern"*)
+			if [ "${#pattern}" -gt "$best_len" ]; then
+				best="${cfg_model_params_labels[$idx]}"
+				best_len=${#pattern}
+			fi
+			;;
+		esac
+	done
+	echo "$best"
+}
+
 grade_for() {
 	local v="$1"
 	is_num "$v" || {
@@ -307,6 +429,21 @@ grade_color() {
 	esac
 }
 
+# Anthropic seat-tier id -> display text: "max_20x" -> "Max 20x", "pro" -> "Pro".
+# An id this doesn't recognize is Title-Cased word by word rather than dropped,
+# so a tier introduced after this ships still renders something truthful.
+seat_tier_label() {
+	local _raw="$1" _word _out=""
+	{ [ -n "$_raw" ] && [ "$_raw" != "null" ]; } || return
+	for _word in ${_raw//_/ }; do
+		case "$_word" in
+		[0-9]*[xX]) _out+=" $(tr '[:upper:]' '[:lower:]' <<<"$_word")" ;;
+		*) _out+=" $(tr '[:lower:]' '[:upper:]' <<<"${_word:0:1}")${_word:1}" ;;
+		esac
+	done
+	printf '%s' "${_out# }"
+}
+
 # $1 pct, $2 warning threshold, $3 critical threshold
 usage_color() {
 	local u="$1" warn="$2" crit="$3"
@@ -324,6 +461,40 @@ usage_color() {
 	fi
 }
 
+# Projected end-of-window usage as a percent: usage so far scaled to the whole
+# window by the share of it already elapsed. Prints nothing below 10% used,
+# where one early burst would project as a runaway.
+usage_pace_pct() { # $1 used pct, $2 reset epoch, $3 window seconds, $4 now (optional)
+	local used="${1%.*}" reset="${2%.*}" window="$3" now="${4:-$(date +%s)}" elapsed
+	{ is_num "$used" && is_num "$reset" && [ "$used" -ge 10 ]; } || return 0
+	elapsed=$((window - (reset - now)))
+	{ [ "$elapsed" -gt 0 ] && [ "$elapsed" -le "$window" ]; } || return 0
+	printf '%s' $((used * window / elapsed))
+}
+
+# Warning color for a projected usage: red past 100%, amber from 90%.
+pace_color() {
+	is_num "$1" || return 0
+	if [ "$1" -gt 100 ]; then
+		printf '%s' "$RED"
+	elif [ "$1" -ge 90 ]; then
+		printf '%s' "$ORANGE"
+	fi
+}
+
+# Bare "dd/MM" for a date that is a calendar day rather than a moment — the
+# credit snapshot. Deliberately not format_reset_marker, which collapses today
+# to a clock time: correct for a reset that is hours away, nonsense for a
+# snapshot taken at midnight, which would read "as of 00:00".
+format_day_month_epoch() {
+	local epoch="$1"
+	is_num "$epoch" || {
+		echo ""
+		return
+	}
+	date -d "@${epoch%.*}" +"%d/%m" 2>/dev/null || date -r "${epoch%.*}" +"%d/%m" 2>/dev/null || echo ""
+}
+
 # dd/MM/yyyy only — used for the subscription cycle renewal date and the
 # weekly reset date.
 format_date_epoch() {
@@ -333,6 +504,22 @@ format_date_epoch() {
 		return
 	}
 	date -d "@${epoch%.*}" +"%d/%m/%Y" 2>/dev/null || date -r "${epoch%.*}" +"%d/%m/%Y" 2>/dev/null || echo ""
+}
+
+# epoch -> "YYYY-MM-DDT00:00:00Z", the `starting_at` the Admin API cost report
+# takes. Deliberately reads the epoch's LOCAL calendar date and pins that date
+# to the UTC boundary the report snaps its buckets to: the epoch comes from
+# parse_subscription_date, i.e. local midnight on the date the user declared, so
+# re-rendering it in UTC would move the window a day west of that date in every
+# zone ahead of UTC and silently bill an extra day's spend against the snapshot.
+format_cost_report_start() {
+	local epoch="$1" _day
+	is_num "$epoch" || {
+		echo ""
+		return
+	}
+	_day=$(date -d "@${epoch%.*}" +"%Y-%m-%d" 2>/dev/null || date -r "${epoch%.*}" +"%Y-%m-%d" 2>/dev/null)
+	[ -n "$_day" ] && printf '%sT00:00:00Z' "$_day"
 }
 
 # Absolute "when" marker paired with a relative reset countdown: "HH:MM" when the
@@ -384,6 +571,29 @@ parse_subscription_date() {
 	_back=$(date -r "$_epoch" +%d/%m/%Y 2>/dev/null ||
 		date -d "@${_epoch}" +%d/%m/%Y 2>/dev/null)
 	[ "$_back" = "$_d" ] && printf '%s' "$_epoch"
+}
+
+# Credit-snapshot moment: "dd/MM/yyyy" (midnight) or "dd/MM/yyyy HH:MM" (that
+# minute). A balance read off the Console is true at an instant, not for a whole
+# day — anchoring an afternoon reading to midnight would re-subtract everything
+# already spent that day, so /super-status:credits records the clock time and
+# this accepts it. The bare-date form stays valid and means midnight, which is
+# what backdating a top-up to a past day should mean.
+parse_snapshot_moment() {
+	local _raw _date _clock _epoch _hour _minute
+	_raw=$(trim_ws "$1")
+	_date="${_raw%% *}"
+	_epoch=$(parse_subscription_date "$_date")
+	[ -n "$_epoch" ] || return
+	if [ "$_raw" != "$_date" ]; then
+		_clock=$(trim_ws "${_raw#"$_date"}")
+		[[ "$_clock" =~ ^([0-2][0-9]):([0-5][0-9])$ ]] || return
+		_hour=$((10#${BASH_REMATCH[1]}))
+		_minute=$((10#${BASH_REMATCH[2]}))
+		[ "$_hour" -le 23 ] || return
+		_epoch=$((_epoch + _hour * 3600 + _minute * 60))
+	fi
+	printf '%s' "$_epoch"
 }
 
 days_in_month() {
@@ -491,12 +701,322 @@ trim_ws() {
 	printf '%s' "$s"
 }
 
+# Bidi overrides and the invisible direction marks, written as literal UTF-8
+# byte sequences rather than \u escapes: macOS ships bash 3.2, which has no \u.
+SANITIZE_BIDI=(
+	$'\xe2\x80\x8e' $'\xe2\x80\x8f'
+	$'\xe2\x80\xaa' $'\xe2\x80\xab' $'\xe2\x80\xac' $'\xe2\x80\xad' $'\xe2\x80\xae'
+	$'\xe2\x81\xa6' $'\xe2\x81\xa7' $'\xe2\x81\xa8' $'\xe2\x81\xa9'
+)
+# CSI ("ESC [ ... final"), OSC ("ESC ] ... BEL/ST"), then any other
+# ESC-introduced two-character sequence. No branch can match the empty string,
+# so the removal loop in sanitize_text always terminates.
+SANITIZE_ESC_RE=$'\033\\[[0-9;?]*[ -/]*[@-~]|\033\\][^\a\033]*(\a|\033\\\\)?|\033[@-_]?'
+
+# Every string this script did not author itself — a file name or tool argument
+# out of the transcript, a path on disk, a model name, a label from an external
+# snapshot — reaches a terminal that obeys escape sequences, so all of it is
+# routed through here first. Whole escape sequences go before the remaining
+# control characters, so truncation can never leave half a sequence behind, and
+# the visible width the max_width pass counts is the width actually printed.
+# Pure bash on purpose: this runs on a dozen values every render.
+sanitize_text() {
+	# LC_ALL=C so the regex bracket ranges are byte ranges: under a UTF-8
+	# locale macOS's regex engine orders them by collation and misses ESC [ … m.
+	local LC_ALL=C
+	local _s="$1" _m
+	while [[ "$_s" =~ $SANITIZE_ESC_RE ]]; do
+		_m="${BASH_REMATCH[0]}"
+		_s="${_s/"$_m"/}"
+	done
+	for _m in "${SANITIZE_BIDI[@]}"; do
+		_s="${_s//"$_m"/}"
+	done
+	trim_ws "${_s//[[:cntrl:]]/ }"
+}
+
+# OSC 8 terminal hyperlink around $2, addressed by $1. The address is built
+# here from a path this script resolved, never passed through from outside, and
+# is percent-escaped and re-sanitized anyway: a hyperlink embeds its address in
+# an escape sequence, which is precisely the output class sanitize_text exists
+# to close. Anything that fails validation renders as plain text.
+safe_hyperlink() {
+	# LC_ALL=C so the loop walks bytes, not characters: a percent-escape is
+	# defined per byte, and a multi-byte path encoded per character is wrong.
+	local LC_ALL=C
+	local _path="$1" _label="$2" _enc="" _hex="" _c _i
+	[ -n "$_label" ] || return 1
+	_path=$(sanitize_text "$_path")
+	case "$_path" in
+	/*) ;;
+	*) return 1 ;;
+	esac
+	for ((_i = 0; _i < ${#_path}; _i++)); do
+		_c="${_path:_i:1}"
+		case "$_c" in
+		[A-Za-z0-9/._~-]) _enc+="$_c" ;;
+		# A byte at or above 0x80 comes back sign-extended from printf's
+		# "'c" form (FFFFFFFFFFFFFFC3, not C3), so only the low byte is kept.
+		*)
+			printf -v _hex '%02X' "'$_c"
+			_enc+="%${_hex: -2}"
+			;;
+		esac
+	done
+	# shellcheck disable=SC1003  # \\ is the ST terminator's backslash, not a quote escape
+	printf '\033]8;;file://%s\033\\%s\033]8;;\033\\' "$_enc" "$_label"
+}
+
 # UTC ISO-8601 (e.g. "2026-07-17T10:00:00Z") -> epoch seconds. Same BSD/GNU
 # dual-command fallback as parse_subscription_date above; prints nothing on
 # unparseable input rather than failing the caller.
 parse_iso_epoch() {
 	local _t="$1"
 	date -d "$_t" +%s 2>/dev/null || date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$_t" +%s 2>/dev/null
+}
+
+# Total USD spent since $1 (an RFC 3339 day boundary), from the Admin API cost
+# report, printed to stdout; non-zero exit means "no trustworthy figure", which
+# callers must not read as zero spend. $2 is an Admin API key (sk-ant-admin...),
+# which is a different credential from ANTHROPIC_API_KEY. Lives above the source
+# guard only so tests can drive it with a stubbed `curl`; it is the one function
+# up here that touches the network, and no caller runs it inline — see the
+# credit-bar block in the render flow for why it is always backgrounded.
+anthropic_spend_usd() {
+	local _start_iso="$1" _key="$2"
+	local _page="" _url _resp _sum=0 _partial _has_more="" _pages=0
+	while [ "$_pages" -lt 12 ]; do
+		_url="https://api.anthropic.com/v1/organizations/cost_report?starting_at=${_start_iso}&bucket_width=1d&limit=31"
+		[ -n "$_page" ] && _url="${_url}&page=${_page}"
+		_resp=$(curl -s --max-time 10 "$_url" \
+			-H "anthropic-version: 2023-06-01" \
+			-H "x-api-key: ${_key}" \
+			-H "User-Agent: super-status (https://github.com/orassayag/super-status)" 2>/dev/null)
+		[ -n "$_resp" ] || return 1
+		# An error body (rejected key, individual account with no org) carries no
+		# .data array. Bail rather than record its absence as a real zero spend.
+		IFS=$'\t' read -r _partial _has_more _page <<<"$(jq -r '
+            def s(v): if v == null then "" else (v | tostring) end;
+            if (.data | type) != "array" then empty
+            else [ ([.data[].results[]?.amount // "0" | tonumber] | add // 0),
+                   (if .has_more then "1" else "0" end),
+                   s(.next_page) ] | @tsv
+            end' <<<"$_resp" 2>/dev/null)"
+		is_num "$_partial" || return 1
+		_sum=$(awk "BEGIN{printf \"%.6f\", $_sum + $_partial}")
+		_pages=$((_pages + 1))
+		{ [ "$_has_more" = "1" ] && [ -n "$_page" ]; } || break
+	done
+	# The report states amounts as decimal strings in cents; the bar talks dollars.
+	awk "BEGIN{printf \"%.4f\", $_sum / 100}"
+}
+
+# Total USD spent since epoch $1, priced from this machine's own Claude Code
+# transcripts: the fallback for when the Admin API cost report is unreachable,
+# which for an individual account is always — Anthropic does not issue Admin
+# API keys without an organization. $2 is the projects directory holding the
+# per-session JSONL files; $3 is an optional "pattern<TAB>in/out" list of
+# per-MTok rate overrides, longest matching pattern winning, same matching rule
+# as model_params.
+#
+# Necessarily an ESTIMATE, and labelled as one wherever it renders: it prices
+# only the traffic this machine's Claude Code produced, so Console playground
+# calls, other tools sharing the key, and other machines are invisible to it.
+# It prices at list rates, which is what Claude Code's own Cost field does too.
+local_spend_usd() {
+	local _as_of="$1" _projects="$2" _rates="${3:-}"
+	is_num "$_as_of" || return 1
+	[ -d "$_projects" ] || return 1
+	python3 - "$_as_of" "$_projects" "$_rates" 2>/dev/null <<'PY_LOCAL_SPEND'
+import calendar
+import json
+import os
+import sys
+
+as_of = int(sys.argv[1])
+projects = sys.argv[2]
+overrides = sys.argv[3] if len(sys.argv) > 3 else ''
+
+# USD per million tokens, (input, output), keyed by a lowercase substring of the
+# model id; the longest match wins, so "opus-4-6" can differ from "opus". These
+# are Anthropic list rates and they do change — model_pricing in config.json
+# overrides any of them without anyone editing this table.
+RATES = {
+    'fable-5': (10.0, 50.0),
+    'mythos-5': (10.0, 50.0),
+    'opus-5': (5.0, 25.0),
+    'opus-4-8': (5.0, 25.0),
+    'opus-4-7': (5.0, 25.0),
+    'opus-4-6': (5.0, 25.0),
+    'sonnet-5': (2.0, 10.0),
+    'sonnet-4-6': (3.0, 15.0),
+    'haiku-4-5': (1.0, 5.0),
+}
+# Cache tokens are priced off the input rate: a 5-minute write costs 1.25x, a
+# 1-hour write 2x, and a read 0.1x.
+WRITE_5M, WRITE_1H, READ = 1.25, 2.0, 0.1
+
+for line in overrides.splitlines():
+    pattern, _, rate = line.strip().partition('\t')
+    parts = rate.split('/')
+    if pattern and len(parts) == 2:
+        try:
+            RATES[pattern.lower()] = (float(parts[0]), float(parts[1]))
+        except ValueError:
+            pass
+
+
+def rate_for(model):
+    model = (model or '').lower()
+    best = None
+    for pattern, rate in RATES.items():
+        if pattern in model and (best is None or len(pattern) > len(best[0])):
+            best = (pattern, rate)
+    return best[1] if best else None
+
+
+def to_epoch(stamp):
+    # Transcript timestamps are UTC ISO-8601 ("2026-09-19T08:21:04.123Z"). Parsed
+    # by hand rather than with datetime.fromisoformat, which rejects the trailing
+    # Z before Python 3.11 and would there silently drop every line.
+    try:
+        date, _, clock = stamp.partition('T')
+        year, month, day = (int(v) for v in date.split('-'))
+        hour, minute, second = clock.rstrip('Z').split(':')[:3]
+        return calendar.timegm((year, month, day, int(hour), int(minute),
+                                int(float(second)), 0, 0, 0))
+    except (ValueError, AttributeError):
+        return None
+
+
+# One assistant message reaches more than one transcript — resuming or forking
+# a session copies its history into the new file, and in practice ~45% of rows
+# in a day's transcripts are such copies. Billing happened once, so pricing
+# every copy inflates the estimate by nearly half. Deduplicated on the API's own
+# message id (requestId as the fallback); a row carrying neither is priced,
+# since dropping it would under-count and it cannot be matched to anything.
+seen_messages = set()
+
+total = 0.0
+for project in os.scandir(projects):
+    if not project.is_dir():
+        continue
+    for entry in os.scandir(project.path):
+        # A file untouched since the snapshot holds nothing inside the window.
+        if not entry.name.endswith('.jsonl') or entry.stat().st_mtime < as_of:
+            continue
+        try:
+            with open(entry.path, encoding='utf-8', errors='replace') as fh:
+                for line in fh:
+                    if '"assistant"' not in line:
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except ValueError:
+                        continue
+                    if row.get('type') != 'assistant':
+                        continue
+                    stamp = to_epoch(row.get('timestamp'))
+                    if stamp is None or stamp < as_of:
+                        continue
+                    message = row.get('message') or {}
+                    identity = message.get('id') or row.get('requestId')
+                    if identity:
+                        if identity in seen_messages:
+                            continue
+                        seen_messages.add(identity)
+                    usage = message.get('usage') or {}
+                    rate = rate_for(message.get('model'))
+                    if not rate:
+                        continue
+                    rate_in, rate_out = rate
+                    creation = usage.get('cache_creation') or {}
+                    write_5m = creation.get('ephemeral_5m_input_tokens')
+                    write_1h = creation.get('ephemeral_1h_input_tokens')
+                    if write_5m is None and write_1h is None:
+                        # Older rows carry only the undifferentiated total; price
+                        # it at the 5-minute rate, which is the default TTL.
+                        write_5m = usage.get('cache_creation_input_tokens') or 0
+                        write_1h = 0
+                    tokens_in = (
+                        (usage.get('input_tokens') or 0)
+                        + (write_5m or 0) * WRITE_5M
+                        + (write_1h or 0) * WRITE_1H
+                        + (usage.get('cache_read_input_tokens') or 0) * READ
+                    )
+                    total += tokens_in * rate_in / 1e6
+                    total += (usage.get('output_tokens') or 0) * rate_out / 1e6
+        except OSError:
+            continue
+
+print('%.4f' % total)
+PY_LOCAL_SPEND
+}
+
+# Timeout command, resolved once: GNU coreutils `timeout` on Linux, `gtimeout`
+# from homebrew's coreutils on macOS. Neither present means git runs unbounded,
+# exactly as it did before — a missing timeout must never disable git itself.
+GIT_TIMEOUT_CMD=""
+if command -v timeout >/dev/null 2>&1; then
+	GIT_TIMEOUT_CMD="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then
+	GIT_TIMEOUT_CMD="gtimeout"
+fi
+
+# Every git call this script makes goes through here. The statusline re-runs
+# every couple of seconds, so a git call that blocks — a stalled network mount,
+# a credential helper waiting on a password — does not merely delay one render,
+# it queues stuck processes behind every following one. The time limit turns a
+# stuck call into the "no git here" case every caller already degrades to.
+# GIT_TERMINAL_PROMPT and GCM_INTERACTIVE stop git from ever pausing to ask
+# (none of these five commands touch the network, so nothing is lost);
+# GIT_OPTIONAL_LOCKS keeps a read-only call from taking the index lock.
+# A repository's own config can name programs git runs during status and add
+# (core.fsmonitor, filter drivers), so opening a hostile clone would run its
+# command on every render; fsmonitor is always off, and GIT_SAFE_ARGS carries
+# the per-repository filter overrides from git_safe_init.
+GIT_SAFE_ARGS=()
+git_run() {
+	# shellcheck disable=SC2086  # deliberate split: empty when no timeout exists
+	GIT_OPTIONAL_LOCKS=0 GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=Never \
+		${GIT_TIMEOUT_CMD:+$GIT_TIMEOUT_CMD "$cfg_git_timeout"} \
+		git -c core.fsmonitor=false ${GIT_SAFE_ARGS[@]+"${GIT_SAFE_ARGS[@]}"} "$@" 2>/dev/null
+}
+
+# Blanks every filter driver defined outside global/system config, so only
+# helpers the user installed themselves (git-lfs) still run. Needs git 2.26+
+# for --show-scope; on older git the listing fails and no override is added.
+git_safe_init() { # $1 = git root
+	local _scope _entry _key _name _seen=$'\n'
+	GIT_SAFE_ARGS=()
+	while IFS= read -r -d '' _scope && IFS= read -r -d '' _entry; do
+		case "$_scope" in global | system) continue ;; esac
+		_key="${_entry%%$'\n'*}"
+		_name="${_key#filter.}"
+		_name="${_name%.*}"
+		if [ -z "$_name" ] || [ "$_name" = "$_key" ]; then continue; fi
+		[[ "$_seen" == *$'\n'"$_name"$'\n'* ]] && continue
+		_seen+="$_name"$'\n'
+		GIT_SAFE_ARGS+=(-c "filter.${_name}.clean=" -c "filter.${_name}.smudge="
+			-c "filter.${_name}.process=" -c "filter.${_name}.required=false")
+	done < <(git_run -C "$1" config --show-scope -z --get-regexp '^filter\.')
+}
+
+# Reads stdin until EOF, but gives up once a read waits $1 seconds with nothing
+# complete: `cat` would block for as long as a stalled writer holds the pipe
+# open. Under bash 3.2 a timed-out read drops its partial line, which only
+# happens on the stalled path that would otherwise never render at all.
+read_stdin_bounded() { # $1 = idle timeout in seconds
+	local _line _rc _out=""
+	while :; do
+		_line=""
+		IFS= read -r -t "$1" _line
+		_rc=$?
+		_out+="$_line"
+		[ "$_rc" -eq 0 ] || break
+		_out+=$'\n'
+	done
+	printf '%s' "$_out"
 }
 
 # ---------------------------------------------------------------------------
@@ -513,7 +1033,7 @@ if [ "${SUPER_STATUS_DISABLE:-0}" = "1" ]; then
 	exit 0
 fi
 
-input=$(cat)
+input=$(read_stdin_bounded 2)
 
 # ---------------------------------------------------------------------------
 # Private per-user cache root (XDG). /tmp is world-readable and its predictable
@@ -525,12 +1045,14 @@ if [ ! -d "$CACHE_ROOT" ]; then
 	chmod 700 "$CACHE_ROOT" 2>/dev/null
 fi
 
+CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+
 # ---------------------------------------------------------------------------
 # Config load — one jq call over config.json emits key<TAB>value rows for a
 # fixed key set; unknown keys are ignored, absent keys keep their defaults.
 # "preset" is emitted first so explicit per-key values always override it.
 # ---------------------------------------------------------------------------
-CONFIG_FILE="${SUPER_STATUS_CONFIG:-$HOME/.claude/super-status/config.json}"
+CONFIG_FILE="${SUPER_STATUS_CONFIG:-$CLAUDE_DIR/super-status/config.json}"
 CONFIG_MAX_BYTES=262144
 config_warning_line=""
 
@@ -538,7 +1060,8 @@ apply_preset() {
 	local _v
 	case "$1" in
 	full)
-		for _v in git_dirty git_ahead_behind git_file_stats activity agents todos orchestrator; do
+		for _v in git_dirty git_ahead_behind git_file_stats activity agents todos orchestrator \
+			added_dirs prompt_cache today week session_name usage_pace compactions speed; do
 			printf -v "cfg_show_${_v}" '%s' 1
 		done
 		;;
@@ -552,10 +1075,11 @@ apply_preset() {
 		done
 		;;
 	minimal)
-		for _v in repo cwd worktree lines_changed version git_dirty git_ahead_behind \
-			git_file_stats provider subscription cost total_tokens loc \
+		for _v in repo worktree lines_changed version git_dirty git_ahead_behind \
+			git_file_stats provider mode subscription cost total_tokens loc \
 			session_time thinking_time cache_ratio efficiency tool_calls \
-			activity agents todos orchestrator; do
+			activity agents todos orchestrator added_dirs prompt_cache \
+			today week session_name usage_pace compactions speed; do
 			printf -v "cfg_show_${_v}" '%s' 0
 		done
 		cfg_layout="compact"
@@ -581,12 +1105,27 @@ if [ -f "$CONFIG_FILE" ]; then
             ["context_value", s(.context_value)],
             ["auto_compact_window", s(.auto_compact_window)],
             ["model_source", s(.model_source)],
+            ["plan_label", s(.plan_label)],
+            ["api_credit_balance", s(.api_credit_balance)],
+            ["api_credit_as_of", s(.api_credit_as_of)],
+            ["api_spend_cache_seconds", s(.api_spend_cache_seconds)],
             ["external_usage_path", s(.external_usage_path)],
             ["external_usage_max_age", s(.external_usage_max_age)],
+            ["external_usage_write_path", s(.external_usage_write_path)],
+            ["prompt_cache_ttl_seconds", s(.prompt_cache_ttl_seconds)],
+            ["hyperlinks", s(.hyperlinks)],
+            ["added_dirs_max", s(.added_dirs_max)],
+            ["added_dirs_name_width", s(.added_dirs_name_width)],
+            ["added_dirs_layout", s(.added_dirs_layout)],
             ["lines", (try (.lines | map(join(",")) | join("|")) catch "")],
+            ["right_align", (.right_align | if type == "array" then join(",") elif type == "string" then . else "" end)],
             ["push_warning_threshold", s(.git.push_warning_threshold)],
-            ["push_critical_threshold", s(.git.push_critical_threshold)]
+            ["push_critical_threshold", s(.git.push_critical_threshold)],
+            ["git_timeout_seconds", s(.git.timeout_seconds)],
+            ["jj_enabled", s(.jj.enabled)]
           ]
+          + ((.model_params // {}) | to_entries | map(["model_params_" + .key, s(.value)]))
+          + ((.model_pricing // {}) | to_entries | map(["model_pricing_" + .key, s(.value)]))
           + ((.display // {}) | to_entries | map(["display_" + .key, s(.value)]))
           + ((.colors // {}) | to_entries | map(["color_" + .key, s(.value)]))
           + ((.thresholds // {}) | to_entries | map(["threshold_" + .key, s(.value)]))
@@ -607,22 +1146,49 @@ if [ -f "$CONFIG_FILE" ]; then
 			context_value) case "$_v" in percent | tokens | remaining | both) cfg_context_value="$_v" ;; esac ;;
 			auto_compact_window) is_num "$_v" && [ "${_v%.*}" -ge 1000 ] && cfg_auto_compact_window="${_v%.*}" ;;
 			model_source) case "$_v" in stdin | transcript | auto) cfg_model_source="$_v" ;; esac ;;
+			plan_label) [ -n "$_v" ] && cfg_plan_label=$(trim_ws "$_v") ;;
+			api_credit_balance) is_num "$_v" && cfg_api_credit_balance="$_v" ;;
+			api_credit_as_of) [ -n "$_v" ] && cfg_api_credit_as_of=$(trim_ws "$_v") ;;
+			api_spend_cache_seconds) is_num "$_v" && [ "${_v%.*}" -ge 60 ] && cfg_api_spend_cache_seconds="${_v%.*}" ;;
 			external_usage_path) [ -n "$_v" ] && cfg_external_usage_path="$_v" ;;
 			external_usage_max_age) is_num "$_v" && [ "${_v%.*}" -ge 0 ] && cfg_external_usage_max_age="${_v%.*}" ;;
+			external_usage_write_path) [ -n "$_v" ] && cfg_external_usage_write_path="$_v" ;;
+			prompt_cache_ttl_seconds) is_num "$_v" && [ "${_v%.*}" -ge 60 ] && cfg_prompt_cache_ttl_seconds="${_v%.*}" ;;
+			hyperlinks) _b=$(to_bool "$_v") && cfg_hyperlinks="$_b" ;;
+			added_dirs_max) is_num "$_v" && [ "${_v%.*}" -ge 1 ] && [ "${_v%.*}" -le 20 ] && cfg_added_dirs_max="${_v%.*}" ;;
+			added_dirs_name_width) is_num "$_v" && [ "${_v%.*}" -ge 4 ] && [ "${_v%.*}" -le 80 ] && cfg_added_dirs_name_width="${_v%.*}" ;;
+			added_dirs_layout) case "$_v" in inline | line) cfg_added_dirs_layout="$_v" ;; esac ;;
+			right_align) [ -n "$_v" ] && cfg_right_align="$_v" ;;
+			git_timeout_seconds) is_num "$_v" && [ "${_v%.*}" -ge 1 ] && [ "${_v%.*}" -le 60 ] && cfg_git_timeout="${_v%.*}" ;;
+			jj_enabled) _b=$(to_bool "$_v") && cfg_jj_enabled="$_b" ;;
+			model_params_*)
+				_p="${_k#model_params_}"
+				if [ -n "$_p" ] && [ -n "$_v" ]; then
+					cfg_model_params_patterns+=("$_p")
+					cfg_model_params_labels+=("$_v")
+				fi
+				;;
+			model_pricing_*)
+				_p="${_k#model_pricing_}"
+				if [ -n "$_p" ] && [ -n "$_v" ]; then
+					cfg_model_pricing_patterns+=("$_p")
+					cfg_model_pricing_labels+=("$_v")
+				fi
+				;;
 			lines) [ -n "$_v" ] && cfg_lines="$_v" ;;
 			push_warning_threshold) is_num "$_v" && cfg_push_warning="${_v%.*}" ;;
 			push_critical_threshold) is_num "$_v" && cfg_push_critical="${_v%.*}" ;;
 			display_*)
 				_b=$(to_bool "$_v") || continue
 				case "${_k#display_}" in
-				model | effort | repo | branch | cwd | worktree | lines_changed | version | git_dirty | git_ahead_behind | git_file_stats | provider | subscription | sessions | balance | context | cost | total_tokens | loc | session_time | thinking_time | cache_ratio | efficiency | tool_calls | activity | agents | todos | orchestrator)
+				model | mode | repo | branch | worktree | lines_changed | version | git_dirty | git_ahead_behind | git_file_stats | provider | effort | subscription | sessions | balance | context | cost | total_tokens | loc | session_time | thinking_time | cache_ratio | efficiency | tool_calls | activity | agents | todos | orchestrator | added_dirs | prompt_cache | today | week | session_name | usage_pace | compactions | speed)
 					printf -v "cfg_show_${_k#display_}" '%s' "$_b"
 					;;
 				esac
 				;;
 			color_*)
 				case "${_k#color_}" in
-				label | model | repo | branch | cwd | muted | accent | bar_filled | bar_empty)
+				label | model | repo | branch | muted | accent | bar_filled | bar_empty)
 					printf -v "cfg_color_${_k#color_}" '%s' "$_v"
 					;;
 				esac
@@ -650,7 +1216,6 @@ C_LABEL="$WHITE"
 C_MODEL="$GREEN"
 C_REPO="$WHITE"
 C_BRANCH="$WHITE"
-C_CWD="$WHITE"
 C_MUTED="$GREY"
 C_ACCENT="$ORANGE"
 C_BAR_FILLED=""
@@ -659,7 +1224,6 @@ _c=$(resolve_color "$cfg_color_label") && C_LABEL="$_c"
 _c=$(resolve_color "$cfg_color_model") && C_MODEL="$_c"
 _c=$(resolve_color "$cfg_color_repo") && C_REPO="$_c"
 _c=$(resolve_color "$cfg_color_branch") && C_BRANCH="$_c"
-_c=$(resolve_color "$cfg_color_cwd") && C_CWD="$_c"
 _c=$(resolve_color "$cfg_color_muted") && C_MUTED="$_c"
 _c=$(resolve_color "$cfg_color_accent") && C_ACCENT="$_c"
 _c=$(resolve_color "$cfg_color_bar_filled") && C_BAR_FILLED="$_c"
@@ -672,6 +1236,8 @@ _c=$(resolve_color "$cfg_color_bar_empty") && C_BAR_EMPTY="$_c"
 case "$cfg_language" in
 en | *)
 	L_MODEL="◆"
+	L_MODE_API="API"
+	L_MODE_SUB="Sub"
 	L_SUBSCRIPTION="Sub"
 	L_FIVE_HOUR="5h"
 	L_BALANCE="Bal"
@@ -691,6 +1257,16 @@ en | *)
 	L_BUCKET_READ="Read"
 	L_BUCKET_MCP="MCP"
 	L_BUCKET_OTHER="Other"
+	L_ADDED_DIRS="Added dirs:"
+	L_PROMPT_CACHE="⏱ until"
+	L_PROMPT_CACHE_EXPIRED="⏱ expired"
+	L_TODAY="Today"
+	L_WEEK="Week"
+	L_SPEND_LIMIT="Spend"
+	L_PACE="▲"
+	L_COMPACTIONS="Compactions:"
+	L_SPEED="out:"
+	L_TOKENS_PER_SECOND="tok/s"
 	L_ACTIVITY="Activity:"
 	L_AGENTS="Agents:"
 	L_TODO="Todo:"
@@ -700,6 +1276,10 @@ en | *)
 	L_LEFT="left"
 	L_SUB_MISSING='SUBSCRIPTION START DATE IS MISSING - ADD IT TO THE CLAUDE.MD: "subscription_start_date": "dd/MM/yyyy"'
 	L_SUB_INVALID='SUBSCRIPTION START DATE IS INVALID - ADD IT TO THE CLAUDE.MD: "subscription_start_date": "dd/MM/yyyy"'
+	L_BAL_AS_OF="as of"
+	L_BAL_ESTIMATE="est."
+	L_BAL_DECLARED="declared"
+	L_BAL_INVALID='API CREDIT SNAPSHOT DATE IS MISSING OR INVALID - ADD IT TO CONFIG.JSON: "api_credit_as_of": "dd/MM/yyyy [HH:MM]"'
 	;;
 esac
 
@@ -736,6 +1316,14 @@ five_reset=""
 seven_util_probe=""
 seven_reset=""
 is_agy_marker=""
+session_name=""
+stdin_pc_expires=""
+stdin_pc_ttl=""
+stdin_pc_hit=""
+stdin_pc_warm=""
+spend_util_probe=""
+spend_reset=""
+added_dirs=()
 
 while IFS=$'	' read -r _k _v; do
 	case "$_k" in
@@ -766,10 +1354,26 @@ while IFS=$'	' read -r _k _v; do
 	seven_pct) seven_util_probe="$_v" ;;
 	seven_reset) seven_reset="$_v" ;;
 	is_agy) is_agy_marker="$_v" ;;
+	session_name) session_name="$_v" ;;
+	pc_expires) stdin_pc_expires="$_v" ;;
+	pc_ttl) stdin_pc_ttl="$_v" ;;
+	pc_hit) stdin_pc_hit="$_v" ;;
+	pc_warm) stdin_pc_warm="$_v" ;;
+	spend_pct) spend_util_probe="$_v" ;;
+	spend_reset) spend_reset="$_v" ;;
+	added_dir) [ -n "$_v" ] && added_dirs+=("$_v") ;;
 	esac
 done <<<"$(jq -r '
     def s(v): if v == null then "" else (v | tostring) end;
-    [
+    # The prompt_cache field is new and undocumented: accept epoch seconds or
+    # milliseconds, as a number or a string, or an ISO-8601 timestamp.
+    def epoch:
+      (if type == "number" then .
+       elif type == "string" and test("^[0-9]+([.][0-9]+)?$") then tonumber
+       elif type == "string" then (try (sub("[.][0-9]+"; "") | sub("[+]00:00$"; "Z") | fromdateiso8601) catch null)
+       else null end)
+      | if . == null then null elif . > 1e12 then (. / 1000 | floor) else floor end;
+    ([
       ["model", s(.model.display_name // .model.name // .model.id // .model)],
       ["effort_level", s(.effort.level)],
       ["project_dir", s(.workspace.project_dir // .workspace.current_dir // .workspace // .workspaceUris[0])],
@@ -796,8 +1400,29 @@ done <<<"$(jq -r '
       ["five_reset", s(.rate_limits.five_hour.resets_at)],
       ["seven_pct", s(.rate_limits.seven_day.used_percentage)],
       ["seven_reset", s(.rate_limits.seven_day.resets_at)],
+      ["spend_pct", s(.rate_limits.spend_limit.used_percentage)],
+      ["spend_reset", s(.rate_limits.spend_limit.resets_at)],
+      ["session_name", s(.session_name)],
+      ["pc_expires", s(.prompt_cache.expires_at | epoch)],
+      ["pc_ttl", s(.prompt_cache.ttl)],
+      ["pc_hit", s(.prompt_cache.hit_ratio)],
+      ["pc_warm", s(.prompt_cache.warm)],
       ["is_agy", s(if .vcsName != null or .agent_state != null or (.model.id != null and (.model.id | test("gemini"; "i"))) then 1 else 0 end)]
-    ] | .[] | @tsv' <<<"$input" 2>/dev/null)"
+    ]
+    + ((.workspace.added_dirs // .workspace.additional_directories // [])
+       | if type == "array" then map(["added_dir", s(.)]) else [] end)
+    ) | .[] | @tsv' <<<"$input" 2>/dev/null)"
+
+# Every value above came from outside this script and every one of them is
+# printed to a terminal, so all of them are cleaned in one place rather than at
+# each render site — a new segment then cannot reintroduce the hole by
+# forgetting. Paths keep their own cleaning at the point they are shortened.
+model=$(sanitize_text "$model")
+effort_level=$(sanitize_text "$effort_level")
+worktree=$(sanitize_text "$worktree")
+agent_name=$(sanitize_text "$agent_name")
+cc_version=$(sanitize_text "$cc_version")
+session_name=$(sanitize_text "$session_name")
 
 # Platform detection: Claude Code vs. Google Antigravity CLI (agy)
 IS_ANTIGRAVITY=0
@@ -823,11 +1448,15 @@ fi
 # independently, so each is restored on its own.
 # ---------------------------------------------------------------------------
 _rl_cache="$CACHE_ROOT/rate-limits.tsv"
+RL_FROM_STDIN=0
 if is_num "$five_util_probe" && is_num "$seven_util_probe"; then
+	RL_FROM_STDIN=1
+	debug_log "rate limits: from stdin (5h=${five_util_probe}% 7d=${seven_util_probe}%)"
 	printf '%s\t%s\t%s\t%s\n' \
 		"$five_util_probe" "$five_reset" "$seven_util_probe" "$seven_reset" \
 		>"$_rl_cache" 2>/dev/null
 elif [ -f "$_rl_cache" ]; then
+	debug_log "rate limits: absent from stdin, trying the cross-session cache"
 	IFS=$'\t' read -r _rl_five_pct _rl_five_reset _rl_seven_pct _rl_seven_reset \
 		<"$_rl_cache" 2>/dev/null
 	_rl_now=$(date +%s)
@@ -841,6 +1470,8 @@ elif [ -f "$_rl_cache" ]; then
 		seven_util_probe="$_rl_seven_pct"
 		seven_reset="$_rl_seven_reset"
 	fi
+else
+	debug_log "rate limits: absent from stdin and no cache yet (the 5h/Nd bars stay empty until this session's first API call)"
 fi
 
 # External usage snapshot (opt-in): when stdin omits rate_limits and no live
@@ -849,6 +1480,58 @@ fi
 # optionally carry per-model weekly windows the stdin payload never includes.
 # Only a snapshot fresher than external_usage_max_age is trusted, so a stale
 # file never resurrects a rolled-over window.
+# Producer side (opt-in): the authoritative rate-limit windows arrive free on
+# stdin, are rendered, and were then thrown away — while usage-feeder.sh has to
+# ask a throttled source for the same numbers. Writing them out means the feeder
+# usually finds recent data already waiting and has to poll less, not more.
+#
+# This makes the statusline a SECOND writer on a file the feeder maintains, so
+# it takes the feeder's own rule: never replace fresher data with older. A
+# window that has rolled over has a later resets_at; within the same window a
+# higher used_percentage is the newer reading. Anything else is left alone, so
+# the bars can only ever move forward. The write is staged through .tmp and
+# promoted by mv, so a render interrupted mid-write cannot leave a truncated
+# snapshot for the feeder or the consumer side below to read.
+if [ "$RL_FROM_STDIN" -eq 1 ] && [ -n "$cfg_external_usage_write_path" ]; then
+	_euw_path="$cfg_external_usage_write_path"
+	# shellcheck disable=SC2088  # matching a literal leading ~/ in config text, not expanding
+	case "$_euw_path" in "~/"*) _euw_path="$HOME/${_euw_path#\~/}" ;; esac
+	_euw_ok=0
+	case "$_euw_path" in
+	/*.json) [ -d "${_euw_path%/*}" ] && _euw_ok=1 ;;
+	esac
+	if [ "$_euw_ok" -eq 1 ]; then
+		_euw_prev_reset=0
+		_euw_prev_pct=-1
+		if [ -f "$_euw_path" ]; then
+			IFS=$'\t' read -r _euw_prev_reset _euw_prev_pct <<<"$(jq -r '
+                [(.rate_limits.five_hour.resets_at // 0), (.rate_limits.five_hour.used_percentage // -1)]
+                | @tsv' "$_euw_path" 2>/dev/null)"
+			is_num "${_euw_prev_reset%.*}" || _euw_prev_reset=0
+			is_num "${_euw_prev_pct%.*}" || _euw_prev_pct=-1
+		fi
+		_euw_write=0
+		if [ "${five_reset%.*}" -gt "${_euw_prev_reset%.*}" ] 2>/dev/null; then
+			_euw_write=1
+		elif [ "${five_reset%.*}" = "${_euw_prev_reset%.*}" ] &&
+			[ "${five_util_probe%.*}" -ge "${_euw_prev_pct%.*}" ] 2>/dev/null; then
+			_euw_write=1
+		fi
+		if [ "$_euw_write" -eq 1 ]; then
+			if jq -n --argjson f5 "$five_util_probe" --argjson r5 "${five_reset:-0}" \
+				--argjson f7 "$seven_util_probe" --argjson r7 "${seven_reset:-0}" \
+				'{rate_limits: {five_hour: {used_percentage: $f5, resets_at: $r5},
+                                    seven_day: {used_percentage: $f7, resets_at: $r7}}}' \
+				>"${_euw_path}.tmp" 2>/dev/null; then
+				chmod 600 "${_euw_path}.tmp" 2>/dev/null
+				mv "${_euw_path}.tmp" "$_euw_path" 2>/dev/null
+			else
+				rm -f "${_euw_path}.tmp" 2>/dev/null
+			fi
+		fi
+	fi
+fi
+
 model_scoped_rows=""
 if [ -n "$cfg_external_usage_path" ]; then
 	_eu_path="$cfg_external_usage_path"
@@ -856,6 +1539,9 @@ if [ -n "$cfg_external_usage_path" ]; then
 	case "$_eu_path" in "~/"*) _eu_path="$HOME/${_eu_path#\~/}" ;; esac
 	if [ -f "$_eu_path" ]; then
 		_eu_age=$(($(date +%s) - $(file_mtime "$_eu_path")))
+		if [ "$cfg_external_usage_max_age" -ne 0 ] && [ "$_eu_age" -gt "$cfg_external_usage_max_age" ]; then
+			debug_log "external usage snapshot ignored: ${_eu_age}s old, cap is ${cfg_external_usage_max_age}s"
+		fi
 		if [ "$cfg_external_usage_max_age" -eq 0 ] || [ "$_eu_age" -le "$cfg_external_usage_max_age" ]; then
 			_eu_out=$(jq -r '
                 def s(v): if v == null then "" else (v | tostring) end;
@@ -889,11 +1575,64 @@ fi
 [ "$worktree" = "null" ] && worktree=""
 [ -z "$cwd" ] && cwd="$current_dir"
 
-git_root=$(git -C "${cwd:-$project_dir}" rev-parse --show-toplevel 2>/dev/null)
+git_root=$(git_run -C "${cwd:-$project_dir}" rev-parse --show-toplevel)
+debug_log "git: timeout=${GIT_TIMEOUT_CMD:-none} root=${git_root:-<none>}"
 [ -z "$git_root" ] && git_root="${cwd:-$project_dir}"
 git_branch=""
+[ -n "$git_root" ] && [ -d "$git_root" ] && git_safe_init "$git_root"
 [ -n "$git_root" ] && [ -d "$git_root" ] &&
-	git_branch=$(GIT_OPTIONAL_LOCKS=0 git -C "$git_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
+	git_branch=$(git_run -C "$git_root" rev-parse --abbrev-ref HEAD)
+
+# ---------------------------------------------------------------------------
+# Jujutsu — opt-in, and one version control system per repository, never both
+# on the line at once. Two conditions are required before jj takes over: the
+# jj.enabled flag, and a real .jj control directory at or above the working
+# directory. A stray .jj inside an ordinary git repository must not cost that
+# repository its branch name, which is the one way this could go wrong on
+# line 1 of every session.
+#
+# --ignore-working-copy is not optional: without it every jj command snapshots
+# the working copy, so a statusline re-running every two seconds would be
+# writing to the user's repository continuously. This segment is read-only.
+# ---------------------------------------------------------------------------
+JJ_ROOT=""
+jj_conflict=""
+git_dirty_override=""
+if [ "$cfg_jj_enabled" = "1" ] && command -v jj >/dev/null 2>&1; then
+	_jj_probe="${cwd:-$project_dir}"
+	while [ -n "$_jj_probe" ] && [ "$_jj_probe" != "/" ]; do
+		if [ -d "$_jj_probe/.jj" ]; then
+			JJ_ROOT="$_jj_probe"
+			break
+		fi
+		_jj_probe="${_jj_probe%/*}"
+	done
+fi
+if [ -n "$JJ_ROOT" ]; then
+	git_root="$JJ_ROOT"
+	_jj_dir="$CACHE_ROOT/jj-cache"
+	mkdir -p "$_jj_dir"
+	_jj_key=$(echo "$JJ_ROOT" | tr '/' '_')
+	_jj_file="$_jj_dir/${_jj_key}.txt"
+	_jj_stamp="$_jj_dir/${_jj_key}.stamp"
+	_jj_do=1
+	if [ -f "$_jj_stamp" ]; then
+		[ $(($(date +%s) - $(file_mtime "$_jj_stamp"))) -lt 10 ] && _jj_do=0
+	fi
+	if [ "$_jj_do" -eq 1 ]; then
+		# shellcheck disable=SC2086  # deliberate split: empty when no timeout exists
+		${GIT_TIMEOUT_CMD:+$GIT_TIMEOUT_CMD "$cfg_git_timeout"} \
+			jj --repository "$JJ_ROOT" --no-pager --color never --ignore-working-copy \
+			log --no-graph -r @ -T \
+			'separate("\t", bookmarks.join(","), change_id.shortest(8), if(empty, "", "dirty"), if(conflict, "conflict", "")) ++ "\n"' \
+			>"$_jj_file" 2>/dev/null
+		touch "$_jj_stamp"
+	fi
+	IFS=$'\t' read -r _jj_bookmarks _jj_change _jj_dirty _jj_conf <"$_jj_file" 2>/dev/null
+	git_branch=$(sanitize_text "${_jj_bookmarks:-$_jj_change}")
+	[ "$_jj_dirty" = "dirty" ] && git_dirty_override=1
+	[ "$_jj_conf" = "conflict" ] && jj_conflict=1
+fi
 
 # ---------------------------------------------------------------------------
 # Backend detection
@@ -930,6 +1669,55 @@ esac
 
 IS_SUBSCRIPTION=0
 is_num "$five_util_probe" && is_num "$seven_util_probe" && IS_SUBSCRIPTION=1
+
+# ---------------------------------------------------------------------------
+# Account mode — how this account pays: "API" (prepaid/invoice credit billing)
+# or a named subscription tier. ~/.claude.json's oauthAccount is the only local
+# record of it; its seatTier names the tier on accounts where Anthropic
+# populates it, which it does not for most subscribers, so a config-declared
+# plan_label outranks everything. Behind a proxy none of this describes who is
+# actually billed, so the [provider] badge speaks for the backend instead.
+# ---------------------------------------------------------------------------
+ACCOUNT_MODE=""
+ACCOUNT_MODE_KIND=""
+
+resolve_account_mode() {
+	local _billing="" _seat="" _claude_json="$HOME/.claude.json"
+	# A relocated config folder keeps its own .claude.json.
+	[ -n "$CLAUDE_CONFIG_DIR" ] && [ -f "$CLAUDE_CONFIG_DIR/.claude.json" ] &&
+		_claude_json="$CLAUDE_CONFIG_DIR/.claude.json"
+	if [ -f "$_claude_json" ]; then
+		IFS=$'\t' read -r _billing _seat <<<"$(jq -r '
+            def s(v): if v == null then "" else (v | tostring) end;
+            [s(.oauthAccount.billingType), s(.oauthAccount.seatTier)] | @tsv' \
+			"$_claude_json" 2>/dev/null)"
+	fi
+	case "$_billing" in
+	prepaid | invoice) ACCOUNT_MODE_KIND="api" ;;
+	subscription) ACCOUNT_MODE_KIND="subscription" ;;
+	esac
+	# stdin's rate_limits only ever accompany a subscription, so they settle the
+	# kind when ~/.claude.json is missing (fresh machine, or a sandboxed HOME).
+	[ -z "$ACCOUNT_MODE_KIND" ] && [ "$IS_SUBSCRIPTION" -eq 1 ] && ACCOUNT_MODE_KIND="subscription"
+
+	if [ -n "$cfg_plan_label" ]; then
+		ACCOUNT_MODE="$cfg_plan_label"
+	elif [ -n "$_seat" ]; then
+		ACCOUNT_MODE=$(seat_tier_label "$_seat")
+	elif [ "$ACCOUNT_MODE_KIND" = "api" ]; then
+		ACCOUNT_MODE="$L_MODE_API"
+	elif [ "$ACCOUNT_MODE_KIND" = "subscription" ]; then
+		ACCOUNT_MODE="$L_MODE_SUB"
+	fi
+}
+resolve_account_mode
+
+mode_badge=""
+if [ "$cfg_show_mode" = "1" ] && [ "$IS_ANTIGRAVITY" -eq 0 ]; then
+	if [ -n "$cfg_plan_label" ] || [ "$IS_PROXY" -eq 0 ]; then
+		mode_badge="$ACCOUNT_MODE"
+	fi
+fi
 
 # Provider badge on the model segment — first-party Anthropic shows nothing;
 # any other backend is named explicitly so the backend mode is visible at a glance.
@@ -1001,7 +1789,13 @@ git_behind=""
 git_staged=""
 git_modified=""
 git_untracked=""
-if [ -n "$git_branch" ] && { [ "$cfg_show_git_dirty" = "1" ] || [ "$cfg_show_git_ahead_behind" = "1" ] || [ "$cfg_show_git_file_stats" = "1" ]; }; then
+git_conflicted=""
+# jj already answered the dirty question in its own pass, and has no upstream
+# ahead/behind or staging area to report — so git is not consulted at all for a
+# repository jj has taken over.
+if [ -n "$JJ_ROOT" ]; then
+	git_dirty="${git_dirty_override:-}"
+elif [ -n "$git_branch" ] && { [ "$cfg_show_git_dirty" = "1" ] || [ "$cfg_show_git_ahead_behind" = "1" ] || [ "$cfg_show_git_file_stats" = "1" ]; }; then
 	_gs_dir="$CACHE_ROOT/gitstatus-cache"
 	mkdir -p "$_gs_dir"
 	_gs_key=$(echo "$git_root" | tr '/' '_')
@@ -1017,6 +1811,7 @@ if [ -n "$git_branch" ] && { [ "$cfg_show_git_dirty" = "1" ] || [ "$cfg_show_git
 		_st=0
 		_mo=0
 		_un=0
+		_cf=0
 		_ah=""
 		_bh=""
 		if [ "$cfg_show_git_file_stats" = "1" ]; then
@@ -1025,24 +1820,25 @@ if [ -n "$git_branch" ] && { [ "$cfg_show_git_dirty" = "1" ] || [ "$cfg_show_git
 				_d=1
 				case "${_pline:0:2}" in
 				'??') _un=$((_un + 1)) ;;
+				DD | AU | UD | UA | DU | AA | UU) _cf=$((_cf + 1)) ;;
 				*)
 					case "${_pline:0:1}" in [MADRC]) _st=$((_st + 1)) ;; esac
 					case "${_pline:1:1}" in [MD]) _mo=$((_mo + 1)) ;; esac
 					;;
 				esac
-			done < <(GIT_OPTIONAL_LOCKS=0 git -C "$git_root" status --porcelain 2>/dev/null)
+			done < <(git_run -C "$git_root" status --porcelain --ignore-submodules=dirty)
 		else
 			# First line only — a dirty/clean answer doesn't need the full listing.
-			_first=$(GIT_OPTIONAL_LOCKS=0 git -C "$git_root" status --porcelain 2>/dev/null | head -n 1)
+			_first=$(git_run -C "$git_root" status --porcelain --ignore-submodules=dirty | head -n 1)
 			[ -n "$_first" ] && _d=1
 		fi
 		if [ "$cfg_show_git_ahead_behind" = "1" ]; then
-			read -r _bh _ah <<<"$(GIT_OPTIONAL_LOCKS=0 git -C "$git_root" rev-list --left-right --count '@{upstream}...HEAD' 2>/dev/null)"
+			read -r _bh _ah <<<"$(git_run -C "$git_root" rev-list --left-right --count '@{upstream}...HEAD')"
 		fi
-		echo "$_d ${_ah:--} ${_bh:--} $_st $_mo $_un" >"$_gs_file"
+		echo "$_d ${_ah:--} ${_bh:--} $_st $_mo $_un $_cf" >"$_gs_file"
 		touch "$_gs_stamp"
 	fi
-	read -r git_dirty git_ahead git_behind git_staged git_modified git_untracked <"$_gs_file" 2>/dev/null
+	read -r git_dirty git_ahead git_behind git_staged git_modified git_untracked git_conflicted <"$_gs_file" 2>/dev/null
 	[ "$git_ahead" = "-" ] && git_ahead=""
 	[ "$git_behind" = "-" ] && git_behind=""
 fi
@@ -1108,19 +1904,69 @@ if [ "$cfg_show_orchestrator" = "1" ] && [ -n "$git_root" ]; then
 				master_committed=$((master_committed + 1))
 			elif [ -z "$master_open_num" ]; then
 				master_open_num="$_ms_num"
-				master_open_status="$_ms_status"
+				master_open_status=$(sanitize_text "$_ms_status")
 				if [[ "$_ms_title" == *"spawned="* ]]; then
 					_ms_sp="${_ms_title#*spawned=}"
 					master_open_spawned=$(trim_ws "${_ms_sp%%]*}")
 				fi
 				if [[ "$_ms_title" == *"["* ]]; then
-					master_open_title=$(trim_ws "${_ms_title%%\[*}")
+					master_open_title=$(sanitize_text "${_ms_title%%\[*}")
 				else
-					master_open_title=$(trim_ws "$_ms_title")
+					master_open_title=$(sanitize_text "$_ms_title")
 				fi
 			fi
 		done <"$_master_plan_file"
 	fi
+fi
+
+# ---------------------------------------------------------------------------
+# Session line diff from git (10s cache per session + git root).
+# cost.total_lines_added/removed only counts this session's Edit/Write tools,
+# so edits made through Bash or by sub-agents never reach it. The first render
+# of a session snapshots the whole working tree (tracked + untracked, through a
+# throwaway index so the real one is never touched) as a tree object; every
+# later render diffs a fresh snapshot against it. Commits made mid-session do
+# not reset the count, and pre-existing uncommitted changes are not counted.
+# ---------------------------------------------------------------------------
+git_session_added=""
+git_session_removed=""
+
+snapshot_worktree_tree() { # $1 = git root; prints a tree SHA
+	local _root="$1" _real_index _tmp_index _tree
+	_real_index=$(git_run -C "$_root" rev-parse --path-format=absolute --git-path index) || return 1
+	_tmp_index=$(mktemp "$CACHE_ROOT/index.XXXXXX") || return 1
+	[ -f "$_real_index" ] && cp "$_real_index" "$_tmp_index"
+	GIT_INDEX_FILE="$_tmp_index" git_run -C "$_root" add -A &&
+		_tree=$(GIT_INDEX_FILE="$_tmp_index" git_run -C "$_root" write-tree)
+	rm -f "$_tmp_index" "$_tmp_index.lock"
+	[ -n "$_tree" ] && printf '%s' "$_tree"
+}
+
+if [ "$cfg_show_lines_changed" = "1" ] && [ -z "$JJ_ROOT" ] && [ -n "$session_id" ] &&
+	[ "$(git_run -C "$git_root" rev-parse --is-inside-work-tree)" = "true" ]; then
+	_sd_dir="$CACHE_ROOT/session-diff"
+	mkdir -p "$_sd_dir"
+	_sd_key="$(printf '%s' "$session_id" | tr -c 'A-Za-z0-9_-' '_')_$(echo "$git_root" | tr '/' '_')"
+	_sd_base="$_sd_dir/${_sd_key}.base"
+	_sd_stat="$_sd_dir/${_sd_key}.stat"
+	if [ ! -s "$_sd_base" ]; then
+		find "$_sd_dir" -type f -mtime +7 -delete 2>/dev/null
+		snapshot_worktree_tree "$git_root" >"$_sd_base" || rm -f "$_sd_base"
+		printf '0 0' >"$_sd_stat"
+	fi
+	_sd_do=1
+	if [ -f "$_sd_stat" ]; then
+		_sd_age=$(($(date +%s) - $(file_mtime "$_sd_stat")))
+		[ "$_sd_age" -lt 10 ] && _sd_do=0
+	fi
+	if [ "$_sd_do" -eq 1 ] && [ -s "$_sd_base" ]; then
+		_sd_now=$(snapshot_worktree_tree "$git_root")
+		if [ -n "$_sd_now" ]; then
+			git_run -C "$git_root" diff --numstat --no-renames --no-ext-diff --no-textconv "$(cat "$_sd_base")" "$_sd_now" |
+				awk '$1 ~ /^[0-9]+$/ {a+=$1; r+=$2} END {printf "%d %d", a, r}' >"$_sd_stat"
+		fi
+	fi
+	read -r git_session_added git_session_removed <"$_sd_stat" 2>/dev/null
 fi
 
 # ---------------------------------------------------------------------------
@@ -1200,10 +2046,16 @@ bucket_other=""
 activity_value=""
 agents_value=""
 todo_value=""
+compactions_count=""
+prompt_cache_expiry=""
+prompt_cache_ttl=""
+prompt_cache_fallback_base=""
+speed_value=""
 
 _need_transcript=0
 for _flag in "$cfg_show_total_tokens" "$cfg_show_tool_calls" "$cfg_show_efficiency" \
-	"$cfg_show_activity" "$cfg_show_agents" "$cfg_show_todos"; do
+	"$cfg_show_activity" "$cfg_show_agents" "$cfg_show_todos" \
+	"$cfg_show_compactions" "$cfg_show_prompt_cache" "$cfg_show_speed"; do
 	[ "$_flag" = "1" ] && _need_transcript=1
 done
 [ "$_want_transcript_model" -eq 1 ] && _need_transcript=1
@@ -1217,10 +2069,12 @@ if [ "$_need_transcript" -eq 1 ] && [ -n "$transcript_path" ] && [ -f "$transcri
 	_tr_src_mtime=$(file_mtime "$transcript_path")
 	_tr_cached_mtime=$(cat "$_tr_stamp" 2>/dev/null || echo -1)
 	if [ "$_tr_src_mtime" != "$_tr_cached_mtime" ]; then
+		debug_log "transcript changed (mtime ${_tr_src_mtime}); re-running the transcript pass"
 		_tr_value=$(
 			python3 - "$transcript_path" 2>/dev/null <<'PYEOF'
 import json
 import os
+import re
 import sys
 from datetime import datetime
 
@@ -1234,23 +2088,52 @@ agent_tools = {'task', 'agent'}
 
 tools = []
 tools_by_id = {}
+# A background agent's completion notice may name only its task id, which is
+# the agentId its launch result reported.
+agent_launches = {}
 latest_todos = None
 latest_model = ''
+compactions = 0
+# Prompt-cache expiry and output speed are both read off the newest MAIN-session
+# assistant message. Sub-agent responses (isSidechain) are excluded on purpose:
+# they run against their own cache and never refresh this session's, so counting
+# one would report an expiry that is not the one the next message pays for.
+cache_write_epoch = None
+cache_write_ttl = 0
+last_main_assistant_epoch = None
+speed_tokens = 0
+speed_seconds = None
+previous_epoch = None
+
+
+# A transcript records whatever the session touched — a file name, a search
+# pattern, a to-do title, an agent description — and every one of those reaches
+# a terminal that obeys escape sequences. Whole sequences are deleted first, so
+# the truncation below can never leave a half-removed sequence behind; what is
+# left of the control characters (and the bidi overrides, which disguise what a
+# line really says) becomes a space, preserving the old tab/newline behaviour.
+_ESC_RE = re.compile(r'\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[@-_]?')
+_CTRL_RE = re.compile('[\x00-\x1f\x7f-\x9f‎‏‪-‮⁦-⁩]')
 
 
 def clean(text, limit):
     if not isinstance(text, str):
         return ''
-    return text.replace('\t', ' ').replace('\n', ' ').strip()[:limit]
+    return _CTRL_RE.sub(' ', _ESC_RE.sub('', text)).strip()[:limit]
+
+
+def to_seconds(timestamp):
+    if not isinstance(timestamp, str):
+        return None
+    try:
+        return datetime.fromisoformat(timestamp.replace('Z', '+00:00')).timestamp()
+    except Exception:
+        return None
 
 
 def to_epoch(timestamp):
-    if not isinstance(timestamp, str):
-        return ''
-    try:
-        return str(int(datetime.fromisoformat(timestamp.replace('Z', '+00:00')).timestamp()))
-    except Exception:
-        return ''
+    seconds = to_seconds(timestamp)
+    return '' if seconds is None else str(int(seconds))
 
 
 def target_for(name, tool_input):
@@ -1273,6 +2156,19 @@ def target_for(name, tool_input):
     return ''
 
 
+# Absolute file path of a tool call, for the optional activity hyperlink. Only
+# an already-absolute path qualifies: a relative one would have to be resolved
+# against a working directory this pass does not know, and guessing it would
+# produce a link that opens the wrong file.
+def path_for(tool_input):
+    if not isinstance(tool_input, dict):
+        return ''
+    candidate = tool_input.get('file_path') or tool_input.get('path') or tool_input.get('notebook_path')
+    if isinstance(candidate, str) and candidate.startswith('/'):
+        return clean(candidate, 200)
+    return ''
+
+
 def is_async_launch(block):
     if block.get('isAsync') is True or block.get('status') == 'async_launched':
         return True
@@ -1282,6 +2178,28 @@ def is_async_launch(block):
         if isinstance(item, dict) and (item.get('isAsync') is True or item.get('status') == 'async_launched'):
             return True
     return False
+
+
+# A background agent's tool_result lands at launch; it finishes when a
+# task-notification is enqueued, or, in forked/resumed sessions, when a
+# queued_command attachment carries the same notice.
+def task_notice(obj):
+    notice = None
+    if obj.get('type') == 'queue-operation' and obj.get('operation') == 'enqueue':
+        notice = obj.get('content')
+    elif obj.get('type') == 'attachment':
+        attachment = obj.get('attachment')
+        if isinstance(attachment, dict) and attachment.get('type') == 'queued_command':
+            notice = attachment.get('prompt')
+    if isinstance(notice, list):
+        notice = ''.join(b.get('text', '') for b in notice if isinstance(b, dict) and isinstance(b.get('text'), str))
+    if not isinstance(notice, str):
+        return None
+    task_id = re.search(r'<task-id>([^<]+)</task-id>', notice)
+    if not task_id:
+        return None
+    tool_use_id = re.search(r'<tool-use-id>([^<]+)</tool-use-id>', notice)
+    return tool_use_id.group(1) if tool_use_id else agent_launches.get(task_id.group(1))
 
 
 try:
@@ -1294,13 +2212,19 @@ try:
                 obj = json.loads(line)
             except Exception:
                 continue
+            if obj.get('type') == 'system' and obj.get('subtype') == 'compact_boundary':
+                compactions += 1
+            finished_id = task_notice(obj)
+            if finished_id in tools_by_id:
+                tools_by_id[finished_id]['done'] = True
+            row_epoch = to_seconds(obj.get('timestamp'))
             msg = obj.get('message') or {}
             role = msg.get('role')
             content = msg.get('content')
             if role == 'assistant':
                 model_name = msg.get('model')
                 if isinstance(model_name, str) and model_name and model_name != '<synthetic>':
-                    latest_model = model_name
+                    latest_model = clean(model_name, 60)
                 usage = msg.get('usage') or {}
                 for key in ('input_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens'):
                     value = usage.get(key)
@@ -1309,6 +2233,29 @@ try:
                 out = usage.get('output_tokens')
                 if isinstance(out, (int, float)):
                     total_out += out
+                if not obj.get('isSidechain') and row_epoch is not None:
+                    last_main_assistant_epoch = row_epoch
+                    creation = usage.get('cache_creation') or {}
+                    ttl = 0
+                    if creation.get('ephemeral_1h_input_tokens'):
+                        ttl = 3600
+                    elif creation.get('ephemeral_5m_input_tokens'):
+                        ttl = 300
+                    elif usage.get('cache_creation_input_tokens'):
+                        ttl = 300
+                    if ttl:
+                        cache_write_epoch = row_epoch
+                        cache_write_ttl = ttl
+                    # The interval is measured to the row that triggered this
+                    # response (a user message or a tool result), which is the
+                    # only timing the transcript records. It is meaningless
+                    # across a resume or a long idle gap, so the render side
+                    # drops any figure outside a plausible band.
+                    if isinstance(out, (int, float)) and previous_epoch is not None:
+                        speed_tokens = out
+                        speed_seconds = row_epoch - previous_epoch
+            if row_epoch is not None:
+                previous_epoch = row_epoch
             elif obj.get('type') == 'PLANNER_RESPONSE':
                 usage = obj.get('usage') or {}
                 for key in ('input_tokens', 'prompt_tokens', 'cached_tokens', 'cache_read_input_tokens'):
@@ -1321,7 +2268,7 @@ try:
                         total_out += value
                 model_name = obj.get('model') or (obj.get('model_info') or {}).get('name')
                 if isinstance(model_name, str) and model_name:
-                    latest_model = model_name
+                    latest_model = clean(model_name, 60)
                 tool_calls = obj.get('tool_calls')
                 if isinstance(tool_calls, list):
                     for tc in tool_calls:
@@ -1342,11 +2289,12 @@ try:
                             buckets['OTHER'] += 1
                         entry = {
                             'id': tc.get('id') or str(len(tools)),
-                            'name': name,
+                            'name': clean(name, 24),
                             'low': low,
                             'done': True,
                             'epoch': to_epoch(obj.get('created_at')),
                             'target': clean(target_for(name, tc.get('arguments') or {}), 30),
+                            'path': path_for(tc.get('arguments') or {}),
                         }
                         tools.append(entry)
             if not isinstance(content, list):
@@ -1373,11 +2321,12 @@ try:
                     tool_input = block.get('input')
                     entry = {
                         'id': block.get('id'),
-                        'name': name,
+                        'name': clean(name, 24),
                         'low': low,
                         'done': False,
                         'epoch': to_epoch(obj.get('timestamp')),
                         'target': clean(target_for(name, tool_input), 30),
+                        'path': path_for(tool_input),
                     }
                     if low in agent_tools and isinstance(tool_input, dict):
                         entry['agent'] = True
@@ -1394,7 +2343,12 @@ try:
                 elif btype == 'tool_result':
                     tool_id = block.get('tool_use_id')
                     if tool_id in tools_by_id:
-                        tools_by_id[tool_id]['done'] = not is_async_launch(block)
+                        launch = obj.get('toolUseResult')
+                        launch = launch if isinstance(launch, dict) else {}
+                        tools_by_id[tool_id]['done'] = not (is_async_launch(block) or is_async_launch(launch))
+                        agent_id = launch.get('agentId')
+                        if isinstance(agent_id, str) and agent_id:
+                            agent_launches[agent_id] = tool_id
 except Exception:
     pass
 
@@ -1404,6 +2358,20 @@ if latest_model:
 print(f'BUCKET\tTOTAL\t{sum(buckets.values())}')
 for key, count in buckets.items():
     print(f'BUCKET\t{key}\t{count}')
+if compactions:
+    print(f'COMPACTIONS\t{compactions}')
+if cache_write_epoch is not None and cache_write_ttl:
+    print(f'CACHEEXP\t{int(cache_write_epoch + cache_write_ttl)}\t{cache_write_ttl}')
+elif last_main_assistant_epoch is not None:
+    # No tier recorded on any cache write — the render side dates the
+    # configured fallback TTL from here rather than assuming a tier.
+    print(f'CACHEBASE\t{int(last_main_assistant_epoch)}')
+# A rate is only meaningful over a plausible interval: below half a second the
+# division amplifies clock noise, and a gap of minutes means the session was
+# idle, not slow. Outside that band, and under a response too short to average,
+# nothing is emitted rather than a figure that would mislead.
+if speed_seconds is not None and 0.5 <= speed_seconds <= 600 and speed_tokens >= 50:
+    print('SPEED\t%.1f' % (speed_tokens / speed_seconds))
 
 # Activity groups: newest first, consecutive completed calls of the same tool
 # collapsed into one "×N" group. Agents and TodoWrite have their own lines.
@@ -1417,10 +2385,12 @@ for entry in reversed(tools):
         continue
     if len(groups) >= 5:
         break
-    groups.append({'name': entry['name'], 'status': status, 'count': 1, 'target': entry['target']})
+    groups.append({'name': entry['name'], 'status': status, 'count': 1,
+                   'target': entry['target'], 'path': entry.get('path', '')})
 for group in groups:
     target = group['target'] if group['count'] == 1 else ''
-    print(f"ACT\t{group['status']}\t{group['count']}\t{group['name']}\t{target}")
+    path = group['path'] if group['count'] == 1 else ''
+    print(f"ACT\t{group['status']}\t{group['count']}\t{group['name']}\t{target}\t{path}")
 
 for entry in tools:
     if entry.get('agent') and not entry['done']:
@@ -1444,7 +2414,7 @@ PYEOF
 
 	if [ -s "$_tr_file" ]; then
 		_now_epoch=$(date +%s)
-		while IFS=$'\t' read -r _tag _a _b _c _d; do
+		while IFS=$'\t' read -r _tag _a _b _c _d _e; do
 			case "$_tag" in
 			TOKENS)
 				session_total_input="$_a"
@@ -1452,6 +2422,21 @@ PYEOF
 				;;
 			MODEL)
 				transcript_model="$_a"
+				;;
+			COMPACTIONS)
+				is_num "$_a" && compactions_count="$_a"
+				;;
+			CACHEEXP)
+				is_num "$_a" && {
+					prompt_cache_expiry="$_a"
+					prompt_cache_ttl="$_b"
+				}
+				;;
+			CACHEBASE)
+				is_num "$_a" && prompt_cache_fallback_base="$_a"
+				;;
+			SPEED)
+				is_num "$_a" && speed_value="$_a"
 				;;
 			BUCKET)
 				is_num "$_b" || continue
@@ -1466,15 +2451,19 @@ PYEOF
 				esac
 				;;
 			ACT)
-				# _a status, _b count, _c name, _d target
+				# _a status, _b count, _c name, _d target, _e absolute path
+				_act_target="$_d"
+				if [ "$cfg_hyperlinks" = "1" ] && [ -n "$_d" ] && [ -n "$_e" ]; then
+					_act_link=$(safe_hyperlink "$_e" "$_d") && _act_target="$_act_link"
+				fi
 				if [ "$_a" = "run" ]; then
 					_act="${ORANGE}◐${RESET} ${CYAN}${_c}${RESET}"
-					[ -n "$_d" ] && _act="${_act}${C_MUTED}: ${_d}${RESET}"
+					[ -n "$_d" ] && _act="${_act}${C_MUTED}: ${_act_target}${RESET}"
 				elif is_num "$_b" && [ "$_b" -gt 1 ]; then
 					_act="${GREEN}✓${RESET} ${CYAN}${_c}${RESET} ${C_ACCENT}×${_b}${RESET}"
 				else
 					_act="${GREEN}✓${RESET} ${CYAN}${_c}${RESET}"
-					[ -n "$_d" ] && _act="${_act}${C_MUTED}: ${_d}${RESET}"
+					[ -n "$_d" ] && _act="${_act}${C_MUTED}: ${_act_target}${RESET}"
 				fi
 				[ -n "$activity_value" ] && activity_value="${activity_value} | "
 				activity_value="${activity_value}${_act}"
@@ -1545,7 +2534,7 @@ SUBSCRIPTION_START_RAW=""
 
 resolve_subscription_start_date() {
 	local _file _raw
-	for _file in "${git_root:+$git_root/CLAUDE.md}" "$HOME/.claude/CLAUDE.md"; do
+	for _file in "${git_root:+$git_root/CLAUDE.md}" "$CLAUDE_DIR/CLAUDE.md"; do
 		{ [ -n "$_file" ] && [ -f "$_file" ]; } || continue
 		_raw=$(grep -o '"subscription_start_date"[[:space:]]*:[[:space:]]*"[^"]*"' "$_file" 2>/dev/null | head -n1)
 		[ -z "$_raw" ] && continue
@@ -1616,9 +2605,14 @@ fi
 # segments onto lines. Segment names are the config/layout vocabulary.
 # ---------------------------------------------------------------------------
 
+seg_mode=""
+[ -n "$mode_badge" ] && seg_mode="${C_ACCENT}${mode_badge}${RESET}"
+
 seg_model=""
 if [ "$cfg_show_model" = "1" ] && [ -n "$model" ]; then
-	seg_model="${C_MODEL}${L_MODEL} ${model}${RESET}"
+	seg_model="${C_MODEL}${L_MODEL}${RESET} ${C_MODEL}${model}${RESET}"
+	_model_params=$(model_params_label "$model")
+	[ -n "$_model_params" ] && seg_model="${seg_model} $(muted "(${_model_params})")"
 	[ -n "$provider_badge" ] && seg_model="${seg_model} $(muted "[${provider_badge}]")"
 	if [ "$cfg_show_effort" = "1" ] && [ -n "$effort_level" ]; then
 		_effort_display="$(tr '[:lower:]' '[:upper:]' <<<"${effort_level:0:1}")${effort_level:1}"
@@ -1633,6 +2627,9 @@ if [ "$cfg_show_branch" = "1" ] && [ -n "$git_branch" ]; then
 	_branch_display="$git_branch"
 	[ "$cfg_show_git_dirty" = "1" ] && [ "$git_dirty" = "1" ] && _branch_display="${_branch_display}*"
 	_branch_part="${C_BRANCH}${_branch_display}${RESET}"
+	# An unresolved jj conflict is the one state worth a colour of its own here:
+	# it blocks the next operation, which a dirty marker does not.
+	[ "$jj_conflict" = "1" ] && _branch_part="${_branch_part} ${RED}⚠${RESET}"
 	if [ "$cfg_show_git_ahead_behind" = "1" ]; then
 		if is_num "$git_ahead" && [ "$git_ahead" -gt 0 ]; then
 			if [ "$git_ahead" -ge "$cfg_push_critical" ]; then
@@ -1654,6 +2651,8 @@ if [ "$cfg_show_branch" = "1" ] && [ -n "$git_branch" ]; then
 		is_num "$git_staged" && [ "$git_staged" -gt 0 ] && _stats="${_stats}${_stats:+ }+${git_staged}"
 		is_num "$git_untracked" && [ "$git_untracked" -gt 0 ] && _stats="${_stats}${_stats:+ }?${git_untracked}"
 		[ -n "$_stats" ] && _branch_part="${_branch_part} $(muted "${_stats}")"
+		is_num "$git_conflicted" && [ "$git_conflicted" -gt 0 ] &&
+			_branch_part="${_branch_part} ${RED}=${git_conflicted}${RESET}"
 	fi
 fi
 
@@ -1670,7 +2669,7 @@ seg_branch=""
 seg_worktree=""
 _repo_part=""
 if [ "$cfg_show_repo" = "1" ] && [ -n "$project_dir" ]; then
-	_repo_display=$(path_tail "$project_dir" "$cfg_path_levels")
+	_repo_display=$(sanitize_text "$(path_tail "$project_dir" "$cfg_path_levels")")
 	[ -n "$_repo_display" ] && _repo_part="${C_REPO}${_repo_display}${RESET}"
 fi
 if [ -n "$_repo_part" ]; then
@@ -1682,41 +2681,17 @@ else
 	seg_worktree="$_worktree_part"
 fi
 
-seg_cwd=""
-if [ "$cfg_show_cwd" = "1" ] && [ -n "$cwd" ]; then
-	_cwd_display=""
-	if [ -n "$git_branch" ]; then
-		if [ -d "$cwd" ] && _git_prefix=$(GIT_OPTIONAL_LOCKS=0 git -C "$cwd" rev-parse --show-prefix 2>/dev/null); then
-			if [ -n "$_git_prefix" ]; then
-				_cwd_display="${_git_prefix%/}"
-			else
-				_cwd_display="."
-			fi
-		fi
-		if [ -z "$_cwd_display" ]; then
-			_norm_cwd="${cwd%/}"
-			[ -z "$_norm_cwd" ] && _norm_cwd="/"
-			_norm_root="${git_root%/}"
-			[ -z "$_norm_root" ] && _norm_root="/"
-			if [ "$_norm_cwd" = "$_norm_root" ]; then
-				_cwd_display="."
-			elif [[ "$_norm_cwd" == "$_norm_root"/* ]]; then
-				_cwd_display="${_norm_cwd#"$_norm_root"/}"
-			fi
-		fi
-	fi
-	[ -z "$_cwd_display" ] && _cwd_display="${cwd/#$HOME/\~}"
-	seg_cwd="${C_CWD}${_cwd_display}${RESET}"
-fi
-
-# Straight from Claude Code's own cost.total_lines_added/removed — this only
-# reflects edits made by this session's own tools (not sub-agents or nested
-# repos), but it's what Claude Code itself reports, so it's never stale.
+# Each side is the larger of Claude Code's own counter (which also sees edits
+# outside the git root) and the git session diff (which also sees Bash and
+# sub-agent edits). Always rendered, +0 -0 included, so its absence never has
+# to be interpreted.
 seg_lines_changed=""
 if [ "$cfg_show_lines_changed" = "1" ]; then
-	if [ "$la" -gt 0 ] || [ "$lr" -gt 0 ]; then
-		seg_lines_changed="${GREEN}+${la}${RESET} ${RED}-${lr}${RESET}"
-	fi
+	la_shown=$la
+	lr_shown=$lr
+	is_num "$git_session_added" && [ "$git_session_added" -gt "$la_shown" ] && la_shown=$git_session_added
+	is_num "$git_session_removed" && [ "$git_session_removed" -gt "$lr_shown" ] && lr_shown=$git_session_removed
+	seg_lines_changed="${GREEN}+${la_shown}${RESET} ${RED}-${lr_shown}${RESET}"
 fi
 
 seg_agent=""
@@ -1734,6 +2709,13 @@ if [ "$cfg_show_version" = "1" ] && [ -n "$cc_version" ]; then
 	else
 		seg_version="$(muted "v${cc_version}")"
 	fi
+fi
+
+seg_session_name=""
+if [ "$cfg_show_session_name" = "1" ] && [ -n "$session_name" ]; then
+	[ "${#session_name}" -gt 40 ] && session_name="${session_name:0:40}…"
+	# shellcheck disable=SC1111
+	seg_session_name="$(muted "“${session_name}”")"
 fi
 
 seg_subscription="$subscription_value"
@@ -1755,6 +2737,21 @@ if [ "$IS_SUBSCRIPTION" -eq 1 ] && [ "$cfg_show_sessions" = "1" ]; then
 	five_color=$(usage_color "$five_pct" "$cfg_5h_warn" "$cfg_5h_crit")
 	seven_color=$(usage_color "$seven_pct" "$cfg_7d_warn" "$cfg_7d_crit")
 
+	# Pace colors only the marker: a projection early in a window swings wildly,
+	# and the bar's color must keep matching the percentage it sits next to.
+	five_pace_mark=""
+	seven_pace_mark=""
+	if [ "$cfg_show_usage_pace" = "1" ]; then
+		_pace_color=$(pace_color "$(usage_pace_pct "$five_pct" "$five_reset" 18000)")
+		if [ -n "$_pace_color" ]; then
+			five_pace_mark=" ${_pace_color}${L_PACE}${RESET}"
+		fi
+		_pace_color=$(pace_color "$(usage_pace_pct "$seven_pct" "$seven_reset" 604800)")
+		if [ -n "$_pace_color" ]; then
+			seven_pace_mark=" ${_pace_color}${L_PACE}${RESET}"
+		fi
+	fi
+
 	five_bar=$(render_bar "$five_pct" "$five_color")
 	seven_bar=$(render_bar "$seven_pct" "$seven_color")
 
@@ -1773,22 +2770,37 @@ if [ "$IS_SUBSCRIPTION" -eq 1 ] && [ "$cfg_show_sessions" = "1" ]; then
 		seven_days_label="${_seven_days_left}d"
 	fi
 
-	seg_sessions="${C_LABEL}${L_FIVE_HOUR}${RESET} ${five_bar} ${five_color}${five_pct}%${RESET}"
+	seg_sessions="${C_LABEL}${L_FIVE_HOUR}${RESET} ${five_bar} ${five_color}${five_pct}%${RESET}${five_pace_mark}"
 	if [ -n "$five_reset_countdown" ]; then
 		five_reset_marker=$(format_reset_marker "$five_reset" clock)
 		seg_sessions="${seg_sessions} $(muted "${L_RESET} ${five_reset_countdown}${five_reset_marker:+ (${five_reset_marker})}")"
 	fi
 
-	seg_sessions="${seg_sessions} $(muted "|") ${C_LABEL}${seven_days_label}${RESET} ${seven_bar} ${seven_color}${seven_pct}%${RESET}"
+	seg_sessions="${seg_sessions} $(muted "|") ${C_LABEL}${seven_days_label}${RESET} ${seven_bar} ${seven_color}${seven_pct}%${RESET}${seven_pace_mark}"
 	if [ -n "$seven_reset_countdown" ]; then
 		seven_reset_marker=$(format_reset_marker "$seven_reset")
 		seg_sessions="${seg_sessions} $(muted "${L_RESET} ${seven_reset_countdown}${seven_reset_marker:+ (${seven_reset_marker})}")"
+	fi
+
+	# Spending cap, sent only for accounts that have one. Live stdin only: it is
+	# not cached across sessions like the 5h/7d windows.
+	if is_num "$spend_util_probe"; then
+		_sl_pct=${spend_util_probe%.*}
+		_sl_color=$(usage_color "$_sl_pct" "$cfg_5h_warn" "$cfg_5h_crit")
+		_sl_bar=$(render_bar "$_sl_pct" "$_sl_color")
+		seg_sessions="${seg_sessions} $(muted "|") ${C_LABEL}${L_SPEND_LIMIT}${RESET} ${_sl_bar} ${_sl_color}${_sl_pct}%${RESET}"
+		_sl_countdown=$(fmt_countdown_epoch "$spend_reset")
+		if [ -n "$_sl_countdown" ]; then
+			_sl_marker=$(format_reset_marker "$spend_reset")
+			seg_sessions="${seg_sessions} $(muted "${L_RESET} ${_sl_countdown}${_sl_marker:+ (${_sl_marker})}")"
+		fi
 	fi
 
 	# Per-model weekly windows from the external snapshot (e.g. a Fable quota the
 	# stdin payload never carries): one compact "name bar pct%" clause each.
 	if [ -n "$model_scoped_rows" ]; then
 		while IFS=$'\t' read -r _ms_name _ms_pct _ms_reset; do
+			_ms_name=$(sanitize_text "$_ms_name")
 			[ -n "$_ms_name" ] || continue
 			_ms_pct=${_ms_pct%.*}
 			is_num "$_ms_pct" || continue
@@ -1839,6 +2851,107 @@ if [ "$IS_OPENROUTER" -eq 1 ] && [ "$cfg_show_balance" = "1" ] && [ -n "$OPENROU
 	fi
 fi
 
+# ---------------------------------------------------------------------------
+# Prepaid API credit bar — the API-billing counterpart to the subscription bar.
+# Anthropic exposes no credit-balance endpoint (the Console's "Credit balance"
+# card is not in the public API), so the balance is a snapshot the user declares
+# in config.json and everything spent since it is measured separately.
+#
+# Two sources, in order. ANTHROPIC_ADMIN_KEY (a different credential from
+# ANTHROPIC_API_KEY) buys the authoritative figure from the Admin API cost
+# report, covering the whole organization. Failing that — and it always fails on
+# an individual account, which Anthropic issues no Admin key for — spend is
+# estimated from this machine's own Claude Code transcripts and marked "est.",
+# because that view cannot see traffic from the Console, other tools, or other
+# machines. Neither available means the declared balance renders on its own,
+# with no bar: a bar with no spend figure would read 0% and quietly lie.
+#
+# The fetch runs DETACHED, never inline. The report paginates at 31 daily
+# buckets a page and this script re-renders every couple of seconds, so a
+# synchronous multi-page call would stall the prompt for as long as the network
+# takes. Each render prints whatever the last completed fetch left on disk and,
+# when that is past its TTL, spawns one background refresh behind an mkdir lock.
+# ---------------------------------------------------------------------------
+balance_warning_line=""
+if [ -z "$seg_balance" ] && [ "$cfg_show_balance" = "1" ] &&
+	[ "$ACCOUNT_MODE_KIND" != "subscription" ] && [ -n "$cfg_api_credit_balance" ]; then
+	_ac_as_of=$(parse_snapshot_moment "$cfg_api_credit_as_of")
+	if [ -z "$_ac_as_of" ]; then
+		balance_warning_line="${BOLD_RED}${L_BAL_INVALID}${RESET}"
+	else
+		_ac_dir="$CACHE_ROOT/anthropic-cost"
+		mkdir -p "$_ac_dir" 2>/dev/null
+		# Keyed by snapshot date: moving the snapshot must not read back a spend
+		# total that was accumulated from the old one.
+		_ac_file="$_ac_dir/spend-${_ac_as_of}.txt"
+		_ac_stamp="$_ac_dir/spend-${_ac_as_of}.stamp"
+		_ac_lock="$_ac_dir/fetch.lock"
+		_ac_age=$cfg_api_spend_cache_seconds
+		[ -f "$_ac_stamp" ] && _ac_age=$(($(date +%s) - $(file_mtime "$_ac_stamp")))
+		# Where the per-session transcripts live, for the local estimate. Derived
+		# from this session's own transcript, with the config folder as the fallback.
+		_ac_projects="$CLAUDE_DIR/projects"
+		if [ -n "$transcript_path" ]; then
+			_ac_p=$(dirname "$(dirname "$transcript_path")")
+			[ -d "$_ac_p" ] && _ac_projects="$_ac_p"
+		fi
+		_ac_rates=""
+		for _i in "${!cfg_model_pricing_patterns[@]}"; do
+			_ac_rates+="${cfg_model_pricing_patterns[$_i]}"$'\t'"${cfg_model_pricing_labels[$_i]}"$'\n'
+		done
+		if [ "$_ac_age" -ge "$cfg_api_spend_cache_seconds" ] &&
+			{ [ -n "${ANTHROPIC_ADMIN_KEY:-}" ] || command -v python3 >/dev/null 2>&1; }; then
+			# A lock left behind by a killed fetcher would wedge refreshes
+			# forever, so one older than the worst-case curl budget is abandoned.
+			if [ -d "$_ac_lock" ] && [ $(($(date +%s) - $(file_mtime "$_ac_lock"))) -gt 180 ]; then
+				rmdir "$_ac_lock" 2>/dev/null
+			fi
+			if mkdir "$_ac_lock" 2>/dev/null; then
+				_ac_start_iso=$(format_cost_report_start "$_ac_as_of")
+				(
+					trap 'rmdir "$_ac_lock" 2>/dev/null' EXIT
+					_src=""
+					_val=""
+					if [ -n "${ANTHROPIC_ADMIN_KEY:-}" ] && command -v curl >/dev/null 2>&1; then
+						_val=$(anthropic_spend_usd "$_ac_start_iso" "$ANTHROPIC_ADMIN_KEY") && _src="admin"
+					fi
+					if [ -z "$_src" ]; then
+						_val=$(local_spend_usd "$_ac_as_of" "$_ac_projects" "$_ac_rates") && _src="local"
+					fi
+					# Staged through .tmp and promoted by mv so a render reading
+					# mid-write can never see a truncated dollar figure. The
+					# source travels with the figure so the render knows whether
+					# it owes the reader an "est." caveat.
+					if [ -n "$_src" ]; then
+						printf '%s\t%s' "$_src" "$_val" >"${_ac_file}.tmp"
+						mv "${_ac_file}.tmp" "$_ac_file" 2>/dev/null
+					fi
+					# Stamped either way: a rejected key must back off to the TTL
+					# too, not respawn a fetcher on every render.
+					touch "$_ac_stamp" 2>/dev/null
+				) >/dev/null 2>&1 &
+				disown 2>/dev/null
+			fi
+		fi
+
+		_ac_src=""
+		_ac_spend=""
+		[ -f "$_ac_file" ] && IFS=$'\t' read -r _ac_src _ac_spend <"$_ac_file"
+		_ac_total=$(printf '%.2f' "$cfg_api_credit_balance")
+		_ac_marker=$(format_day_month_epoch "$_ac_as_of")
+		_ac_caveat=""
+		[ "$_ac_src" = "local" ] && _ac_caveat="${L_BAL_ESTIMATE} · "
+		if is_num "$_ac_spend"; then
+			_ac_left=$(awk "BEGIN{v=$cfg_api_credit_balance-$_ac_spend; printf \"%.2f\", (v<0?0:v)}")
+			_ac_pct=$(awk "BEGIN{ if ($cfg_api_credit_balance>0) { p=($_ac_spend/$cfg_api_credit_balance)*100; printf \"%.0f\", (p>100?100:p) } else print 0 }")
+			_ac_color=$(usage_color "$_ac_pct" "$cfg_5h_warn" "$cfg_5h_crit")
+			seg_balance="${C_LABEL}${L_BALANCE}${RESET} $(render_bar "$_ac_pct" "$_ac_color") ${_ac_color}${_ac_pct}%${RESET} $(muted "\$${_ac_left}/\$${_ac_total}${_ac_marker:+ (${_ac_caveat}${L_BAL_AS_OF} ${_ac_marker})}")"
+		else
+			seg_balance="${C_LABEL}${L_BALANCE}${RESET} $(muted "\$${_ac_total}${_ac_marker:+ (${L_BAL_DECLARED} ${_ac_marker})}")"
+		fi
+	fi
+fi
+
 # Context segment — which value(s) render next to the bar is configurable:
 # percent | tokens | remaining (tokens left before auto-compact) | both.
 seg_context=""
@@ -1870,6 +2983,141 @@ if [ "$cfg_show_cost" = "1" ] && is_num "$cost_usd"; then
 	seg_cost="$(muted "${_cost_label}") ${C_ACCENT}\$$(printf "%.2f" "$cost_usd")${RESET}"
 fi
 
+# Today's spend across every session, which is the figure people actually
+# budget against — the session cost resets on every /clear, so three clears into
+# a day it reads low while the day's real total is several times that.
+#
+# The ledger is one file per local calendar day, one row per session, holding
+# the cost that session had reached when this day first saw it (its baseline)
+# and its latest. Today's total is the sum of the differences — so a session
+# already running when the option was enabled contributes only what it spends
+# from that point, and a session that crosses midnight is split across the two
+# days by getting a fresh baseline in the new day's file. Rows unseen for more
+# than a day are dropped on every write, so the file cannot grow without limit.
+# Week sums the day files from the local day the weekly window opened, so day
+# files are kept for eight days.
+seg_today=""
+seg_week=""
+if { [ "$cfg_show_today" = "1" ] || [ "$cfg_show_week" = "1" ]; } && is_num "$cost_usd"; then
+	_dc_dir="$CACHE_ROOT/daily-cost"
+	mkdir -p "$_dc_dir" 2>/dev/null
+	_dc_file="$_dc_dir/$(date +%Y-%m-%d).tsv"
+	if [ ! -f "$_dc_file" ]; then
+		: >"$_dc_file"
+		# First render of a new day is the one moment worth paying for a sweep
+		# of the day files that are now too old to ever be read again.
+		find "$_dc_dir" -name '*.tsv' -mtime +8 -delete 2>/dev/null
+	fi
+	# Concurrent sessions rewrite this one file, so the rewrite runs under a
+	# mkdir lock. An update takes milliseconds, so a lock older than 2s belongs
+	# to a killed render; one that cannot be taken in ~0.5s is skipped rather
+	# than stalling the render, accepting the old lost-update risk once.
+	_dc_lock="${_dc_file}.lock"
+	if [ -d "$_dc_lock" ] && [ $(($(date +%s) - $(file_mtime "$_dc_lock"))) -gt 2 ]; then
+		rmdir "$_dc_lock" 2>/dev/null
+	fi
+	_dc_locked=0
+	for _i in 1 2 3 4 5 6 7 8 9 10; do
+		mkdir "$_dc_lock" 2>/dev/null && {
+			_dc_locked=1
+			break
+		}
+		sleep 0.05
+	done
+	_dc_tmp=$(mktemp "${_dc_file}.XXXXXX" 2>/dev/null) || _dc_tmp="${_dc_file}.tmp.$$"
+	_dc_total=$(awk -F'\t' -v sid="${session_id:-unknown}" -v cost="$cost_usd" \
+		-v now="$(date +%s)" -v out="$_dc_tmp" '
+        BEGIN { OFS = "\t"; total = 0; seen = 0 }
+        NF >= 4 && $1 == sid {
+            base = $2 + 0
+            # The same id reappearing below its own baseline is a fresh session
+            # reusing it; re-baseline rather than subtracting into the negative.
+            if (cost + 0 < base) base = cost + 0
+            print sid, base, cost, now > out
+            total += cost - base
+            seen = 1
+            next
+        }
+        NF >= 4 && now - $4 <= 86400 { print $1, $2, $3, $4 > out; total += $3 - $2 }
+        END {
+            if (!seen) print sid, cost, cost, now > out
+            printf "%.2f", total
+        }' "$_dc_file" 2>/dev/null)
+	if [ -s "$_dc_tmp" ]; then
+		mv "$_dc_tmp" "$_dc_file" 2>/dev/null || rm -f "$_dc_tmp"
+	else
+		rm -f "$_dc_tmp"
+	fi
+	[ "$_dc_locked" -eq 1 ] && rmdir "$_dc_lock" 2>/dev/null
+	if [ "$cfg_show_today" = "1" ] && is_num "$_dc_total"; then
+		seg_today="$(muted "$L_TODAY") ${C_ACCENT}\$${_dc_total}${RESET}"
+	fi
+	if [ "$cfg_show_week" = "1" ] && is_num "${seven_reset%.*}"; then
+		_wk_open=$((${seven_reset%.*} - 604800))
+		_wk_start=$(date -d "@${_wk_open}" +%Y-%m-%d 2>/dev/null || date -r "$_wk_open" +%Y-%m-%d 2>/dev/null)
+		_wk_files=()
+		while IFS= read -r _wk_file; do
+			_wk_day="${_wk_file##*/}"
+			[[ "${_wk_day%.tsv}" < "$_wk_start" ]] || _wk_files+=("$_wk_file")
+		done < <(find "$_dc_dir" -name '*.tsv' -type f 2>/dev/null)
+		if [ -n "$_wk_start" ] && [ "${#_wk_files[@]}" -gt 0 ]; then
+			_wk_total=$(awk -F'\t' 'NF >= 4 { total += $3 - $2 } END { printf "%.2f", total }' \
+				"${_wk_files[@]}" 2>/dev/null)
+			is_num "$_wk_total" && seg_week="$(muted "$L_WEEK") ${C_ACCENT}\$${_wk_total}${RESET}"
+		fi
+	fi
+fi
+
+# Extra working directories added with /add-dir, which the stdin JSON already
+# carries. The list is unbounded, so it gets the three limits the field needs:
+# at most added_dirs_max render, the remainder collapses to "+N more", and each
+# name is cut to added_dirs_name_width. In the default "inline" layout this
+# rides the identity line beside the project name; "line" gives it a row.
+seg_added_dirs=""
+added_dirs_inline=""
+if [ "$cfg_show_added_dirs" = "1" ] && [ "${#added_dirs[@]}" -gt 0 ]; then
+	_ad_shown=0
+	_ad_names=()
+	for _ad in "${added_dirs[@]}"; do
+		[ "$_ad_shown" -lt "$cfg_added_dirs_max" ] || break
+		_ad_name=$(sanitize_text "$(path_tail "$_ad" 1)")
+		[ -n "$_ad_name" ] || continue
+		[ "${#_ad_name}" -gt "$cfg_added_dirs_name_width" ] &&
+			_ad_name="${_ad_name:0:$cfg_added_dirs_name_width}…"
+		_ad_names+=("$_ad_name")
+		_ad_shown=$((_ad_shown + 1))
+	done
+	_ad_more=$((${#added_dirs[@]} - _ad_shown))
+	if [ "${#_ad_names[@]}" -gt 0 ] || [ "$_ad_more" -gt 0 ]; then
+		if [ "$cfg_added_dirs_layout" = "line" ]; then
+			_ad_joined=""
+			for _ad_name in "${_ad_names[@]}"; do
+				_ad_joined="${_ad_joined}${_ad_joined:+, }${_ad_name}"
+			done
+			[ "$_ad_more" -gt 0 ] && _ad_joined="${_ad_joined}${_ad_joined:+, }+${_ad_more} more"
+			seg_added_dirs="${C_LABEL}${L_ADDED_DIRS}${RESET} ${C_BRANCH}${_ad_joined}${RESET}"
+		else
+			for _ad_name in "${_ad_names[@]}"; do
+				added_dirs_inline="${added_dirs_inline} ${C_BRANCH}+${_ad_name}${RESET}"
+			done
+			[ "$_ad_more" -gt 0 ] && added_dirs_inline="${added_dirs_inline} $(muted "+${_ad_more} more")"
+		fi
+	fi
+fi
+# The inline form belongs to whichever identity segment actually rendered, so a
+# custom layout that dropped the repo still shows the session's real reach.
+if [ -n "$added_dirs_inline" ]; then
+	if [ -n "$seg_repo" ]; then
+		seg_repo="${seg_repo}${added_dirs_inline}"
+	elif [ -n "$seg_branch" ]; then
+		seg_branch="${seg_branch}${added_dirs_inline}"
+	elif [ -n "$seg_worktree" ]; then
+		seg_worktree="${seg_worktree}${added_dirs_inline}"
+	else
+		seg_added_dirs="${C_LABEL}${L_ADDED_DIRS}${RESET}${added_dirs_inline}"
+	fi
+fi
+
 seg_total_tokens=""
 if [ "$cfg_show_total_tokens" = "1" ] && is_num "$session_total_input" && is_num "$session_total_output"; then
 	_in_fmt=$(fmt_tokens_k "$session_total_input")
@@ -1899,10 +3147,69 @@ fi
 # rather than showing a misleading F(0).
 # Cache % is deliberately muted, not threshold-colored: it's informational,
 # and warning colors are reserved for actionable fields.
+# Claude Code's own hit_ratio (v2.1.260+) outranks the token-derived ratio; it
+# may arrive as a 0–1 fraction or a percent.
 seg_cache_ratio=""
-if [ "$cfg_show_cache_ratio" = "1" ] && [ "$token_total" -gt 0 ]; then
-	cache_ratio=$((${token_cr%.*} * 100 / token_total))
-	seg_cache_ratio="$(muted "${L_CACHE_RATIO} ${cache_ratio}%")"
+if [ "$cfg_show_cache_ratio" = "1" ]; then
+	cache_ratio=""
+	if is_num "$stdin_pc_hit"; then
+		cache_ratio=$(awk -v h="$stdin_pc_hit" 'BEGIN { if (h <= 1) h *= 100; printf "%d", h }')
+	elif [ "$token_total" -gt 0 ]; then
+		cache_ratio=$((${token_cr%.*} * 100 / token_total))
+	fi
+	[ -n "$cache_ratio" ] && seg_cache_ratio="$(muted "${L_CACHE_RATIO} ${cache_ratio}%")"
+fi
+
+# Prompt-cache expiry. A CLOCK TIME, never a countdown: the statusline only
+# repaints while Claude Code is active, so between turns — exactly when the
+# cache is draining — a countdown freezes and keeps reporting a number that has
+# stopped being true, while a clock time stays correct however stale the render
+# is. The tier comes from the transcript's own cache write (5 minutes vs. one
+# hour); prompt_cache_ttl_seconds only fills in for transcripts recording
+# neither, and never overrides one that does. Claude Code v2.1.260+ sends the
+# real expiry on stdin, which outranks the estimate; Antigravity and older
+# Claude Code still rely on it. A stdin `warm: true` vetoes an estimated
+# "expired", which is exactly the case the estimate gets wrong.
+seg_prompt_cache=""
+if [ "$cfg_show_prompt_cache" = "1" ]; then
+	_pc_expiry="$prompt_cache_expiry"
+	_pc_fallback_ttl="$cfg_prompt_cache_ttl_seconds"
+	is_num "$stdin_pc_ttl" && _pc_fallback_ttl="${stdin_pc_ttl%.*}"
+	if is_num "$stdin_pc_expires"; then
+		_pc_expiry="$stdin_pc_expires"
+		prompt_cache_ttl="stdin"
+	elif [ -z "$_pc_expiry" ] && is_num "$prompt_cache_fallback_base"; then
+		_pc_expiry=$((prompt_cache_fallback_base + _pc_fallback_ttl))
+	fi
+	if [ "$stdin_pc_warm" = "false" ] && ! is_num "$stdin_pc_expires"; then
+		seg_prompt_cache="${ORANGE}${L_PROMPT_CACHE_EXPIRED}${RESET}"
+	elif is_num "$_pc_expiry"; then
+		debug_log "prompt cache: expiry=${_pc_expiry} tier=${prompt_cache_ttl:-fallback ${_pc_fallback_ttl}}s"
+		if [ "$_pc_expiry" -le "$(date +%s)" ]; then
+			[ "$stdin_pc_warm" = "true" ] || seg_prompt_cache="${ORANGE}${L_PROMPT_CACHE_EXPIRED}${RESET}"
+		else
+			_pc_clock=$(format_reset_marker "$_pc_expiry" clock)
+			[ -n "$_pc_clock" ] && seg_prompt_cache="$(muted "${L_PROMPT_CACHE} ${_pc_clock}")"
+		fi
+	fi
+fi
+
+# How many times this session's context has already been emptied. Hidden until
+# the first one, the same rule Calls and Eff follow: "Ctx 40%" on a session that
+# has compacted three times means something very different from the same figure
+# at the start, and only the pair says which one you are looking at.
+seg_compactions=""
+if [ "$cfg_show_compactions" = "1" ] && is_num "$compactions_count" && [ "$compactions_count" -gt 0 ]; then
+	seg_compactions="$(muted "${L_COMPACTIONS} ${compactions_count}")"
+fi
+
+# Output rate. A total that is still climbing looks the same whether generation
+# is fast or crawling; a rate is the reading that shows a degraded endpoint or a
+# throttled account while it is happening. The transcript pass emits nothing at
+# all when the interval it would divide by is not trustworthy.
+seg_speed=""
+if [ "$cfg_show_speed" = "1" ] && is_num "$speed_value"; then
+	seg_speed="$(muted "${L_SPEED} ${speed_value} ${L_TOKENS_PER_SECOND}")"
 fi
 
 seg_efficiency=""
@@ -1975,10 +3282,10 @@ fi
 
 segment_value() {
 	case "$1" in
+	mode) printf '%s' "$seg_mode" ;;
 	model) printf '%s' "$seg_model" ;;
 	repo) printf '%s' "$seg_repo" ;;
 	branch) printf '%s' "$seg_branch" ;;
-	cwd) printf '%s' "$seg_cwd" ;;
 	worktree) printf '%s' "$seg_worktree" ;;
 	agent) printf '%s' "$seg_agent" ;;
 	lines_changed) printf '%s' "$seg_lines_changed" ;;
@@ -1995,6 +3302,13 @@ segment_value() {
 	cache_ratio) printf '%s' "$seg_cache_ratio" ;;
 	efficiency) printf '%s' "$seg_efficiency" ;;
 	tool_calls) printf '%s' "$seg_tool_calls" ;;
+	added_dirs) printf '%s' "$seg_added_dirs" ;;
+	prompt_cache) printf '%s' "$seg_prompt_cache" ;;
+	today) printf '%s' "$seg_today" ;;
+	week) printf '%s' "$seg_week" ;;
+	session_name) printf '%s' "$seg_session_name" ;;
+	compactions) printf '%s' "$seg_compactions" ;;
+	speed) printf '%s' "$seg_speed" ;;
 	activity) printf '%s' "$seg_activity" ;;
 	agents) printf '%s' "$seg_agents" ;;
 	todos) printf '%s' "$seg_todos" ;;
@@ -2017,15 +3331,36 @@ layout_spec="$LAYOUT_EXPANDED"
 out_lines=()
 [ -n "$config_warning_line" ] && out_lines+=("$config_warning_line")
 [ -n "$subscription_warning_line" ] && out_lines+=("$subscription_warning_line")
+[ -n "$balance_warning_line" ] && out_lines+=("$balance_warning_line")
+
+# The right-aligned run starts at the first segment named in right_align that
+# actually renders on that line, marked with a \001 sentinel the width-aware
+# awk below turns into padding. A control byte is safe as a marker precisely
+# because sanitize_text strips control characters from every value that came
+# from outside this script, so none can appear inside a segment.
+RIGHT_ALIGN_MARK=$'\001'
+LINE_SEPARATOR=" ${C_MUTED}|${RESET} "
 
 IFS='|' read -ra _layout_line_specs <<<"$layout_spec"
 for _lspec in "${_layout_line_specs[@]}"; do
 	_line=""
+	_right_started=0
 	IFS=',' read -ra _seg_names <<<"$_lspec"
 	for _sn in "${_seg_names[@]}"; do
 		_sv=$(segment_value "$_sn")
-		[ -n "$_sv" ] || continue
-		[ -n "$_line" ] && _line+=" ${C_MUTED}|${RESET} "
+		if [ -z "$_sv" ]; then
+			debug_log "segment '${_sn}' empty (no value, or its display flag is off)"
+			continue
+		fi
+		if [ -n "$_line" ]; then
+			if [ "$_right_started" -eq 0 ] && [ -n "$cfg_right_align" ] &&
+				[[ ",${cfg_right_align}," == *",${_sn},"* ]]; then
+				_line+="$RIGHT_ALIGN_MARK"
+				_right_started=1
+			else
+				_line+="$LINE_SEPARATOR"
+			fi
+		fi
 		_line+="$_sv"
 	done
 	[ -n "$_line" ] && out_lines+=("$_line")
@@ -2048,7 +3383,9 @@ if [ "${#out_lines[@]}" -gt 0 ]; then
 		# glyphs count as width 1 and are never split mid-sequence. In
 		# char-oriented gawk the table simply never matches, which is also
 		# correct. ANSI escapes are copied through without counting.
-		printf '%s\n' "${out_lines[@]}" | awk -v max="$term_width" '
+		printf '%s\n' "${out_lines[@]}" | awk -v max="$term_width" \
+			-v mark="$RIGHT_ALIGN_MARK" \
+			-v fallback="$LINE_SEPARATOR" '
         BEGIN { for (b = 128; b < 192; b++) cont[sprintf("%c", b)] = 1 }
         function visible_width(s,    i, n, c, w, r) {
             n = length(s); i = 1; w = 0
@@ -2065,6 +3402,16 @@ if [ "${#out_lines[@]}" -gt 0 ]; then
         }
         {
             line = $0
+            cut = index(line, mark)
+            if (cut > 0) {
+                left = substr(line, 1, cut - 1)
+                right = substr(line, cut + 1)
+                # Stand down whenever there is no room to pad: pushing the line
+                # past the terminal edge makes it wrap and costs a whole row,
+                # which is strictly worse than the left-packed line it replaced.
+                pad = max - visible_width(left) - visible_width(right)
+                line = (pad >= 1) ? left sprintf("%" pad "s", "") right : left fallback right
+            }
             if (visible_width(line) <= max) { print line; next }
             out = ""; vis = 0; i = 1; n = length(line)
             while (i <= n) {
@@ -2084,7 +3431,10 @@ if [ "${#out_lines[@]}" -gt 0 ]; then
             print out "…\033[0m"
         }'
 	else
-		printf '%s\n' "${out_lines[@]}"
+		# No known width, so right alignment stands down and the run falls back
+		# to an ordinary separator — the same guard the awk above applies.
+		debug_log "terminal width unknown; right_align stands down"
+		printf '%s\n' "${out_lines[@]//$RIGHT_ALIGN_MARK/$LINE_SEPARATOR}"
 	fi
 fi
 
