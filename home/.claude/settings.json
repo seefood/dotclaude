@@ -79,7 +79,7 @@
             "type": "command"
           },
           {
-            "command": "$HOME/.local/bin/blincli set -s claude/waiting",
+            "command": "$HOME/.local/bin/blincli set -s claude/waiting||true",
             "type": "command"
           }
         ]
@@ -117,7 +117,7 @@
             "type": "command"
           },
           {
-            "command": "python3 -I /Users/ira/src/laya-local/gate/hook.py",
+            "command": "python3 -I /Users/ira/src/laya-local/gate/hook.py || true",
             "timeout": 5,
             "type": "command"
           }
@@ -154,7 +154,7 @@
             "type": "command"
           },
           {
-            "command": "$HOME/.local/bin/blincli clear",
+            "command": "$HOME/.local/bin/blincli clear||true",
             "type": "command"
           }
         ]
@@ -172,7 +172,7 @@
             "type": "command"
           },
           {
-            "command": "$HOME/.local/bin/blincli set -s claude/idle",
+            "command": "$HOME/.local/bin/blincli set -s claude/idle||true",
             "type": "command"
           }
         ]
@@ -198,7 +198,7 @@
             "type": "command"
           },
           {
-            "command": "$HOME/.local/bin/blincli set -s claude/idle",
+            "command": "$HOME/.local/bin/blincli set -s claude/idle||true",
             "type": "command"
           }
         ]
@@ -236,7 +236,7 @@
             "type": "command"
           },
           {
-            "command": "$HOME/.local/bin/blincli set -s claude/working",
+            "command": "$HOME/.local/bin/blincli set -s claude/working||true",
             "type": "command"
           }
         ]
