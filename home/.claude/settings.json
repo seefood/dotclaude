@@ -32,7 +32,7 @@
     "DISABLE_BUG_COMMAND": "1",
     "DISABLE_ERROR_REPORTING": "1",
     "DISABLE_TELEMETRY": "1",
-    "VISUAL": "~/.claude/skills/enhance/scripts/enhance"
+    "VISUAL": "enhance"
   },
   "extraKnownMarketplaces": {
     "ira-claude-plugins": {
