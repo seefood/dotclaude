@@ -1,5 +1,66 @@
 {
   "alwaysThinkingEnabled": true,
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Bash(prek run:*)",
+      "Bash(uv sync:*)",
+      "Bash(uv lock)",
+      "Bash(npm test)",
+      "Bash(tofu init:*)",
+      "Bash(tofu plan:*)"
+    ],
+    "environment": [
+      "### Org-wide",
+      "**Organization**: Agrematch (github.com/Agrematch) — scoped to the chembook repo",
+      "**Cloud provider(s)**: AWS (S3, RDS, ECS, Cognito referenced in repo config)",
+      "**Repository visibility**: Not queryable via gh in this session; origin is github.com:Agrematch/chembook.git — assume private per shipped default (no evidence of public visibility)",
+      "**Internal sharing / snippet hosting**: None configured — treat public paste/gist services as outside the trust boundary",
+      "**Secrets management**: AWS Secrets Manager (per docs/adr/CHEMBOOK-ADR-005-secrets-only-in-secrets-manager.md); CI secrets referenced by name only: EXACTO_AUTOMATION_ACCESS_KEY_ID, EXACTO_AUTOMATION_SECRET_ACCESS_KEY, GITHUB_TOKEN",
+      "**Default / protected branches**: main (default branch); direct push to main blocked locally via hooks/pre-push and documented GitHub branch-protection requirement (require PR) — gh-based verification not queryable this session",
+      "**CI/CD deploy targets**: ECS (container overrides referenced in GitHub Actions workflow guidance); separate per-environment Terraform roots per docs/adr/CHEMBOOK-ADR-004 and CHEMBOOK-ADR-007",
+      "**Network posture**: None configured",
+      "**Host containment**: None configured — assume Claude Code runs on an ordinary developer machine with open internet",
+      "**Source control**: The chembook repo (github.com:Agrematch/chembook.git) and its origin remote only",
+      "**Trusted internal domains**: exacto.agrematch.com, exacto-stg.agrematch.com (contacted in this project's transcripts)",
+      "**Trusted cloud buckets**: agrematch-chembook-test (usage-corroborated: appears in config INGEST_S3_TEST_BUCKET and RUN_S3_INGEST_TESTS context); exacto-deployment-metadata-104073948557 (config-derived — not a confirmed upload destination; uploads of local data still require confirmation); exacto-frontend-104073948557 (config-derived — not a confirmed upload destination; uploads of local data still require confirmation)",
+      "**Key internal services**: exacto.agrematch.com, exacto-stg.agrematch.com (internal app hosts contacted from this project)",
+      "**Internal package registry**: None configured",
+      "**Sensitive data locations & audiences**: .env, .env.example (local secrets template), backend/common/usage/retention.py and related usage-retention tests/scripts, docker-compose.prod.yml, .secrets.baseline, .kiro/hooks/deny-secret-reads.sh, .kiro/steering/secret-files.md, scripts/check_db_secret_isolation.sh — share only with audiences cleared for Agrematch confidential/credential-bearing material",
+      "**Data retention / declassification**: None configured",
+      "**Sensitive remote targets**: any host/namespace/container with `prod`/`production` as a whole word or segment (e.g. docker-compose.prod.yml deploy target); chembook-db production RDS endpoint pattern referenced in docs/DATABASE.md",
+      "**Protected deployment namespaces / environments**: None configured — fall back to the Sensitive remote targets heuristic",
+      "**Protected IaC scopes**: IAM, RBAC, networking, quota, node-pool resources; Terraform roots split by blast radius (docs/adr/CHEMBOOK-ADR-004, CHEMBOOK-ADR-007); anything named/tagged with `prod`/`production` as a whole word or segment",
+      "**Organization**: Agrematch (github.com/Agrematch) — scoped to this repo (deployment_files)",
+      "**Cloud provider(s)**: AWS (S3, RDS, ECS, Cognito, Lambda referenced in terraform/ and ansible/)",
+      "**Repository visibility**: Not queryable via gh in this session; origin is github.com:Agrematch/deployment_files.git — assume private per shipped default (no evidence of public visibility)",
+      "**Secrets management**: AWS Secrets Manager (per CLAUDE.md Secret Safety section — must load aws-secrets-manager skill, use {{resolve:secretsmanager:...}} with asm-exec, never call get-secret-value/batch-get-secret-value directly); CI secret referenced by name only: GITHUB_TOKEN",
+      "**Default / protected branches**: master (default branch); README states never commit directly to master without review — gh-based branch-protection/ruleset verification not queryable this session",
+      "**CI/CD deploy targets**: ECS task definitions and services via Bitbucket Pipelines (agrematch repo) and GitHub Actions orchestrator Lambdas (apply-compute/apply-capacity); CI/orchestrator blast radius explicitly excludes RDS, IAM, networking (INFRA-ADR-002)",
+      "**Source control**: The deployment_files repo (github.com:Agrematch/deployment_files.git) and its origin remote only",
+      "**Trusted internal domains**: grafana.agrematch.com (contacted in this project's transcripts)",
+      "**Trusted cloud buckets**: agrematch-dev-tofu-state (usage-corroborated: contacted in transcripts and appears 5× across 3 config files — source of truth for worker config and orchestrator state); agrematch-backup (config-derived — not a confirmed upload destination; uploads of local data still require confirmation)",
+      "**Key internal services**: grafana.agrematch.com (observability, contacted in this project's transcripts)",
+      "**Sensitive data locations & audiences**: .env*, docker-secret.yaml, k8s/grafana/secret.yaml, k8s/mongodb/external/secret.yaml, k8s/mongodb/internal/secret.yaml, grafana/provisioning/datasources/cloudwatch-prod.yaml, ansible/AgretoolsPortal/templates/*.prod.j2, docs/adr/INFRA-ADR-009, INFRA-ADR-014, INFRA-ADR-017 (IAM/secret handling), terraform state files (terraform/.terraform/terraform.tfstate, terraform/AwsCommonInfra/.terraform/terraform.tfstate) — share only with audiences cleared for Agrematch confidential/credential-bearing material",
+      "**Sensitive remote targets**: any host/namespace/container with `prod`/`production` as a whole word or segment (e.g. grafana/provisioning/datasources/cloudwatch-prod.yaml, docker-compose.prod references, ansible *.prod.j2 templates); ProductionVPC (10.1.0.0/16) covering stg, beta, and future prod environments",
+      "**Protected IaC scopes**: IAM, RBAC, networking, quota, node-pool resources; terraform/Services/ is a shared module never applied directly; CI/orchestrator blast radius excludes RDS/IAM/networking (INFRA-ADR-002); anything named/tagged with `prod`/`production` as a whole word or segment",
+      "### User-specific",
+      "**Primary use of Claude Code**: software development (chembook: FastAPI backend + React frontend, formulation R&D search tool)",
+      "**Trusted repo**: /Users/ira/projects/chembook (github.com:Agrematch/chembook.git, origin) — working on feature branches, PRs required into main",
+      "**Org-specific CLIs**: tofu, prek, zizmor, pinact (seen frequently in this project's transcripts); aws, uvx, uv also frequent but are standard tooling",
+      "**routine under ~/projects/chembook/ prefix**: prek run, uv sync/lock, pytest, npm test, scripts/review.sh — routine pre-push/pre-commit checks",
+      "**Primary use of Claude Code**: software development (Agrematch/SimpleAI deployment infrastructure — Terraform/OpenTofu, Ansible, k8s manifests, load-testing harness)",
+      "**Trusted repo**: /Users/ira/projects/deployment_files (github.com:Agrematch/deployment_files.git, origin) — never apply terraform/Services/ directly; never merge to master without explicit user request",
+      "**Org-specific CLIs**: tofu, prek, aws, ansible-playbook, ansible-lint, ansible-doc, shellcheck, shfmt (seen frequently in this project's transcripts or shell history); uv, uvx also frequent but are standard tooling",
+      "**routine under ~/projects/deployment_files/ prefix**: uv sync/lock, prek run, tofu init/plan, pwd, shellcheck, shfmt — routine pre-push/pre-commit and plan checks"
+    ],
+    "soft_deny": [
+      "$defaults",
+      "Bash(tofu apply:*)",
+      "Bash(aws s3 rm:*)",
+      "Bash(terraform apply:*)"
+    ]
+  },
   "cleanupPeriodDays": 365,
   "effortLevel": "high",
   "enableAllProjectMcpServers": false,
@@ -11,6 +72,7 @@
     "debugging-with-the-scientific-method@ira-claude-plugins": false,
     "hookify@claude-plugins-official": false,
     "json-to-toon@ira-claude-plugins": false,
+    "ponytail@ponytail": true,
     "pr-review-toolkit@claude-plugins-official": false,
     "security-guidance@claude-plugins-official": true,
     "settings-curator@ira-claude-plugins": true,
@@ -32,12 +94,18 @@
     "DISABLE_BUG_COMMAND": "1",
     "DISABLE_ERROR_REPORTING": "1",
     "DISABLE_TELEMETRY": "1",
-    "VISUAL": "~/.claude/skills/enhance/scripts/enhance"
+    "VISUAL": "enhance"
   },
   "extraKnownMarketplaces": {
     "ira-claude-plugins": {
       "source": {
         "repo": "seefood/ira-claude-plugins",
+        "source": "github"
+      }
+    },
+    "ponytail": {
+      "source": {
+        "repo": "DietrichGebert/ponytail",
         "source": "github"
       }
     },
@@ -65,6 +133,14 @@
             "type": "command"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node '/Users/ira/.claude/statusbar/update.js' notify",
+            "type": "command"
+          }
+        ]
       }
     ],
     "PermissionRequest": [
@@ -83,6 +159,15 @@
             "type": "command"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node '/Users/ira/.claude/statusbar/update.js' permreq",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
       }
     ],
     "PostToolUse": [
@@ -103,6 +188,15 @@
           },
           {
             "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node ${HOME}'/.claude/statusbar/update.js' post",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      },
+      {
+        "hooks": [
+          {
+            "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node '/Users/ira/.claude/statusbar/update.js' post",
             "type": "command"
           }
         ],
@@ -140,6 +234,15 @@
           }
         ],
         "matcher": "*"
+      },
+      {
+        "hooks": [
+          {
+            "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node '/Users/ira/.claude/statusbar/update.js' pre",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
       }
     ],
     "SessionEnd": [
@@ -158,6 +261,14 @@
             "type": "command"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node '/Users/ira/.claude/statusbar/lifecycle.js' end",
+            "type": "command"
+          }
+        ]
       }
     ],
     "SessionStart": [
@@ -173,6 +284,14 @@
           },
           {
             "command": "$HOME/.local/bin/blincli set -s claude/idle||true",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node '/Users/ira/.claude/statusbar/lifecycle.js' start",
             "type": "command"
           }
         ]
@@ -199,6 +318,14 @@
           },
           {
             "command": "$HOME/.local/bin/blincli set -s claude/idle||true",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node '/Users/ira/.claude/statusbar/update.js' stop",
             "type": "command"
           }
         ]
@@ -240,6 +367,14 @@
             "type": "command"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "PATH=\"/opt/homebrew/bin:/usr/local/bin${PATH:+:$PATH}\" node '/Users/ira/.claude/statusbar/update.js' prompt",
+            "type": "command"
+          }
+        ]
       }
     ]
   },
@@ -260,7 +395,6 @@
       "Bash(git diff *)",
       "Bash(git show *)",
       "Bash(git status *)",
-      "Bash(npm run *)",
       "Bash(git commit *)"
     ],
     "deny": [
@@ -279,8 +413,9 @@
       "Edit(~/.zshrc)",
       "Edit(~/.ssh/**)",
       "Read(~/.ssh/**)",
-      "Read(.env*)",
-      "Read(**/.env*)",
+      "Read(**/.env)",
+      "Read(**/.env.staging)",
+      "Read(**/.env.production)",
       "Read(~/.gnupg/**)",
       "Read(~/.aws/**)",
       "Read(~/.azure/**)",
@@ -299,6 +434,14 @@
       "Read(~/Library/Application Support/**/phantom*/**)",
       "Read(~/Library/Application Support/**/solflare*/**)"
     ]
+  },
+  "pluginConfigs": {
+    "ponytail@ponytail": {
+      "options": {
+        "ledger": true,
+        "sendNames": true
+      }
+    }
   },
   "skillOverrides": {
     "agents-md:cli": "off",
