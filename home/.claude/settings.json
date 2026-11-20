@@ -372,6 +372,7 @@
     "refreshInterval": 10,
     "type": "command"
   },
+  "switchModelsOnFlag": false,
   "terminalProgressBarEnabled": false,
   "tui": "default",
   "verbose": true,
